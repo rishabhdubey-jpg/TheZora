@@ -1,0 +1,110 @@
+// This is your Prisma schema file for Antigravity Studio SaaS
+// Database: PostgreSQL hosted on Google Cloud SQL
+// ORM: Prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ==================== ENUMS ====================
+
+enum Plan {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
+enum CloudProvider {
+  NONE
+  GCP
+  AZURE
+}
+
+
+// ==================== MODELS ====================
+
+model Studio {
+  id          String   @id @default(cuid())
+  name        String
+  email       String   @unique
+  plan        Plan     @default(FREE)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Storage fields
+  storagePath           String?       // e.g. "gs://bucket-{studioId}/"
+  storageLimit          BigInt        @default(10737418240) // 10 GB default
+  storageUsed           BigInt        @default(0)           // Bytes used (atomic incremented)
+  storageBucketName     String?       // The GCS bucket name for this studio
+  cloudProvider         CloudProvider @default(NONE)
+  cloudCredentialsRef   String?       // Encrypted reference / secret key name in Secret Manager
+  autoArchiveColdStorage Boolean      @default(false)        // Only for Pro plan
+  brandConfig           Json?         // Custom brand settings (e.g. { logoUrl, primaryColor })
+
+  events          Event[]
+
+  @@map("studios")
+}
+
+model Event {
+  id          String   @id @default(cuid())
+  accessCode  String   @unique
+  name        String
+  studioId    String
+  studio      Studio   @relation(fields: [studioId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  cinematicPosterUrl String?
+  cinematicVideoId   String?
+
+  photos          Photo[]
+
+  @@index([studioId])
+  @@map("events")
+}
+
+model Photo {
+  id          String   @id @default(cuid())
+  eventId     String
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  studioId    String
+
+  // GCS Object details
+  gcsObjectPath  String   // Full GCS path: studios/{studioId}/{eventId}/{filename}
+  gcsPublicUrl   String?  // Optional signed/public URL for CDN delivery
+  filename       String
+  contentType    String   @default("image/jpeg")
+  sizeBytes      BigInt   @default(0)
+  width          Int?
+  height         Int?
+
+  uploadedAt     DateTime @default(now())
+  isClientFavorite Boolean @default(false)
+
+  faceDescriptors FaceDescriptor[]
+
+  @@index([eventId])
+  @@index([studioId])
+  @@map("photos")
+}
+
+model FaceDescriptor {
+  id          String   @id @default(cuid())
+  photoId     String
+  photo       Photo    @relation(fields: [photoId], references: [id], onDelete: Cascade)
+
+  // The 128-float descriptor from face-api.js stored as a JSON array
+  descriptor  Float[]
+
+  boundingBox Json?    // { x, y, width, height }
+
+  createdAt   DateTime @default(now())
+
+  @@index([photoId])
+  @@map("face_descriptors")
+}

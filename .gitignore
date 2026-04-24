@@ -9,6 +9,8 @@
 !.yarn/plugins
 !.yarn/releases
 !.yarn/versions
+node_modules/
+.pnp.js
 
 # testing
 /coverage
@@ -30,8 +32,15 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
+
 # env files (can opt-in for committing if needed)
 .env*
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
 
 # vercel
 .vercel
@@ -39,3 +48,16 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Database
+*.db
+*.db-journal
+
+# Operating System Files
+.DS_Store
+Thumbs.db
+
+# Optional: If you use face-api weights locally and don't want them in Git
+# public/models/
+
+gcp-key.json
