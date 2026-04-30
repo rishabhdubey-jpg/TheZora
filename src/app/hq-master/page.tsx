@@ -22,14 +22,17 @@ export default async function HQMasterPage() {
   const session = await getSession();
   if (!session) redirect("/");
 
-  const user = await prisma.studio.findUnique({
-    where: { id: session.studioId },
-    select: { isSuperAdmin: true },
-  });
-
-  if (!user?.isSuperAdmin) {
-    redirect("/");
+// Better logic for HQ Master
+const user = await prisma.studio.findFirst({
+  where: { 
+    email: session.email, // Check the email directly
+    isSuperAdmin: true 
   }
+});
+
+if (!user) {
+  redirect("/");
+}
 
   // Fetch counts
   const activeCount = await prisma.studio.count({
