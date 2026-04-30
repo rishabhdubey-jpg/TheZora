@@ -17,13 +17,14 @@ export default function StorageHealthWidget({ studioId, plan = "FREE" }: Props) 
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
-    // Fetch usage from DB on mount
-    refreshStorageUsage(studioId);
+    // Only fetch once studioId is available to avoid undefined requests
+    if (!studioId) return;
+    refreshStorageUsage();
   }, [studioId, refreshStorageUsage]);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    await refreshStorageUsage(studioId);
+    await refreshStorageUsage();
     setTimeout(() => setIsRefreshing(false), 500);
   };
 

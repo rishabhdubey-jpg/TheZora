@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { BlobServiceClient, StorageSharedKeyCredential } from '@azure/storage-blob';
+import { Storage } from '@google-cloud/storage';
 import { prisma } from '@/lib/prisma';
 import { Readable } from 'stream';
 
@@ -24,6 +25,7 @@ export async function GET(req: NextRequest) {
     let containerName = '';
     let accountName = '';
     let accountKey = '';
+    let creds: any = {};
 
     // 1. Resolve Studio & Credentials
     if (!studioId) {
@@ -41,7 +43,7 @@ export async function GET(req: NextRequest) {
 
     const studio = await prisma.studio.findUnique({
       where: { id: studioId },
-      select: { storageBucketName: true, cloudCredentialsRef: true }
+      select: { storageBucketName: true, cloudCredentialsRef: true, storageProvider: true }
     });
 
     if (!studio || !studio.cloudCredentialsRef) {
@@ -49,7 +51,7 @@ export async function GET(req: NextRequest) {
     }
 
     try {
-      const creds = JSON.parse(studio.cloudCredentialsRef);
+      creds = JSON.parse(studio.cloudCredentialsRef);
       accountName = creds.accountName || creds.account_name;
       accountKey = creds.accountKey || creds.account_key;
       containerName = studio.storageBucketName || '';
@@ -58,69 +60,124 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid studio credentials' }, { status: 500 });
     }
 
-    if (!accountName || !accountKey || !containerName) {
-      return NextResponse.json({ error: 'Incomplete storage configuration' }, { status: 500 });
-    }
-
-    // 2. Stream from Azure
-    const credential = new StorageSharedKeyCredential(accountName, accountKey);
-    const blobServiceClient = new BlobServiceClient(
-      `https://${accountName}.blob.core.windows.net`,
-      credential
-    );
-
-    const containerClient = blobServiceClient.getContainerClient(containerName);
-    const blobClient = containerClient.getBlobClient(blobPath);
+    const provider = studio.storageProvider || 'AZURE';
     
-    // Check if blob exists
-    const exists = await blobClient.exists();
-    if (!exists) {
-      return NextResponse.json({ error: 'Blob not found in Azure' }, { status: 404 });
-    }
-
-    // 3. Handle Range Requests (HTTP 206)
+    let totalLength = 0;
+    let webStream: any = null;
+    let contentType = 'application/octet-stream';
     const range = req.headers.get('range');
-    const properties = await blobClient.getProperties();
-    const totalLength = properties.contentLength || 0;
-
     let status = 200;
     let offset = 0;
-    let count = totalLength;
+    let count = 0;
+    let end = 0;
 
-    if (range) {
-      const parts = range.replace(/bytes=/, "").split("-");
-      const start = parseInt(parts[0], 10);
-      const end = parts[1] ? parseInt(parts[1], 10) : totalLength - 1;
-      
-      if (!isNaN(start)) {
-        offset = start;
-        status = 206;
-        count = end - start + 1;
+    if (provider === 'GCP') {
+      const projectId = creds.projectId || creds.project_id;
+      const clientEmail = creds.clientEmail || creds.client_email;
+      const privateKey = (creds.privateKey || creds.private_key || '').replace(/\\n/g, '\n');
+
+      if (!projectId || !clientEmail || !privateKey) {
+        return NextResponse.json({ error: 'Incomplete GCP configuration' }, { status: 500 });
       }
+
+      const storage = new Storage({
+        projectId,
+        credentials: {
+          client_email: clientEmail,
+          private_key: privateKey,
+        }
+      });
+
+      const file = storage.bucket(containerName).file(blobPath);
+      const [exists] = await file.exists();
+      if (!exists) {
+        return NextResponse.json({ error: 'Blob not found in GCP' }, { status: 404 });
+      }
+
+      const [metadata] = await file.getMetadata();
+      totalLength = parseInt(metadata.size, 10) || 0;
+      count = totalLength;
+
+      if (range) {
+        const parts = range.replace(/bytes=/, "").split("-");
+        const start = parseInt(parts[0], 10);
+        end = parts[1] ? parseInt(parts[1], 10) : totalLength - 1;
+        
+        if (!isNaN(start)) {
+          offset = start;
+          status = 206;
+          count = end - start + 1;
+        }
+      } else {
+        end = totalLength - 1;
+      }
+
+      const downloadStream = file.createReadStream({ start: offset, end: end });
+      contentType = metadata.contentType || contentType;
+      webStream = Readable.toWeb(downloadStream as any);
+
+    } else {
+      // Azure
+      accountName = creds.accountName || creds.account_name;
+      accountKey = creds.accountKey || creds.account_key;
+
+      if (!accountName || !accountKey) {
+        return NextResponse.json({ error: 'Incomplete Azure configuration' }, { status: 500 });
+      }
+
+      const credential = new StorageSharedKeyCredential(accountName, accountKey);
+      const blobServiceClient = new BlobServiceClient(
+        `https://${accountName}.blob.core.windows.net`,
+        credential
+      );
+
+      const containerClient = blobServiceClient.getContainerClient(containerName);
+      const blobClient = containerClient.getBlobClient(blobPath);
+      
+      const exists = await blobClient.exists();
+      if (!exists) {
+        return NextResponse.json({ error: 'Blob not found in Azure' }, { status: 404 });
+      }
+
+      const properties = await blobClient.getProperties();
+      totalLength = properties.contentLength || 0;
+      count = totalLength;
+
+      if (range) {
+        const parts = range.replace(/bytes=/, "").split("-");
+        const start = parseInt(parts[0], 10);
+        end = parts[1] ? parseInt(parts[1], 10) : totalLength - 1;
+        
+        if (!isNaN(start)) {
+          offset = start;
+          status = 206;
+          count = end - start + 1;
+        }
+      } else {
+        end = totalLength - 1;
+      }
+
+      const downloadResponse = await blobClient.downloadToBuffer(offset, count);
+      contentType = properties.contentType || contentType;
+      webStream = downloadResponse;
     }
 
-    const downloadResponse = await blobClient.download(offset, count);
-    
     const headers: Record<string, string> = {
-      'Content-Type': downloadResponse.contentType || 'application/octet-stream',
+      'Content-Type': contentType,
       'Cache-Control': 'public, max-age=3600',
       'Accept-Ranges': 'bytes',
+      'Access-Control-Allow-Origin': '*',
+      'Cross-Origin-Resource-Policy': 'cross-origin',
     };
 
     if (status === 206) {
-      const end = offset + (downloadResponse.contentLength || 0) - 1;
       headers['Content-Range'] = `bytes ${offset}-${end}/${totalLength}`;
-      headers['Content-Length'] = (downloadResponse.contentLength || 0).toString();
+      headers['Content-Length'] = count.toString();
     } else {
       headers['Content-Length'] = totalLength.toString();
     }
-    
-    // Explicitly convert Node.js stream to Web ReadableStream for Next.js App Router
-    const webStream = downloadResponse.readableStreamBody 
-      ? Readable.toWeb(downloadResponse.readableStreamBody as any) 
-      : null;
 
-    return new NextResponse(webStream as any, {
+    return new NextResponse(webStream, {
       status,
       headers,
     });

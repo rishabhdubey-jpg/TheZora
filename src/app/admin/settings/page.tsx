@@ -6,11 +6,19 @@ import { Settings, UploadCloud, Loader2, Save } from "lucide-react";
 import { useCloudStore } from '@/lib/cloudStore';
 
 export default function SettingsAdminPage() {
-  const studioId = "demo-studio"; // In production, derived from session
-  const { gcpProjectId, gcpClientEmail, gcpPrivateKey, azureAccountName, azureAccountKey, connectedProvider } = useCloudStore();
+  const { connectedProvider } = useCloudStore(); // Keep for legacy reference if needed
 
   const [logoUrl, setLogoUrl] = useState('');
   const [primaryColor, setPrimaryColor] = useState('#d4af37'); // Default gold
+  
+  // Cloud Config State
+  const [storageProvider, setStorageProvider] = useState<'AZURE' | 'GCP' | 'NONE'>('NONE');
+  const [storageBucketName, setStorageBucketName] = useState('');
+  const [azureAccountName, setAzureAccountName] = useState('');
+  const [azureAccountKey, setAzureAccountKey] = useState('');
+  const [gcpProjectId, setGcpProjectId] = useState('');
+  const [gcpClientEmail, setGcpClientEmail] = useState('');
+  const [gcpPrivateKey, setGcpPrivateKey] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
@@ -20,12 +28,29 @@ export default function SettingsAdminPage() {
   useEffect(() => {
     const fetchSettings = async () => {
       try {
-        const res = await fetch(`/api/admin/settings?studioId=${studioId}`);
+        const res = await fetch(`/api/admin/settings`);
         if (res.ok) {
           const data = await res.json();
           if (data.brandConfig) {
             setLogoUrl(data.brandConfig.logoUrl || '');
             setPrimaryColor(data.brandConfig.primaryColor || '#d4af37');
+          }
+          if (data.cloudConfig) {
+            setStorageProvider(data.cloudConfig.storageProvider || 'NONE');
+            setStorageBucketName(data.cloudConfig.storageBucketName || '');
+            if (data.cloudConfig.cloudCredentialsRef) {
+              try {
+                const creds = JSON.parse(data.cloudConfig.cloudCredentialsRef);
+                if (data.cloudConfig.storageProvider === 'AZURE') {
+                  setAzureAccountName(creds.accountName || '');
+                  setAzureAccountKey(creds.accountKey || '');
+                } else if (data.cloudConfig.storageProvider === 'GCP') {
+                  setGcpProjectId(creds.projectId || '');
+                  setGcpClientEmail(creds.clientEmail || '');
+                  setGcpPrivateKey(creds.privateKey || '');
+                }
+              } catch (e) {}
+            }
           }
         }
       } catch (err) {
@@ -35,7 +60,7 @@ export default function SettingsAdminPage() {
       }
     };
     fetchSettings();
-  }, [studioId]);
+  }, []);
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -57,7 +82,6 @@ export default function SettingsAdminPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          studioId,
           eventId: "brand", // Use fixed path for branding assets
           filename: file.name,
           contentType: file.type,
@@ -92,7 +116,7 @@ export default function SettingsAdminPage() {
 
       // 3. Set logo URL (No need to confirm since it's not a gallery photo)
       const storagePath = azureBlobPath || gcsObjectPath;
-      setLogoUrl(`/api/storage/proxy?path=${encodeURIComponent(storagePath)}&studioId=${studioId}`);
+      setLogoUrl(`/api/storage/proxy?path=${encodeURIComponent(storagePath)}`);
 
     } catch (err: any) {
       console.error(err);
@@ -110,8 +134,16 @@ export default function SettingsAdminPage() {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          studioId,
-          brandConfig: { logoUrl, primaryColor }
+          brandConfig: { logoUrl, primaryColor },
+          cloudConfig: {
+            storageProvider,
+            storageBucketName,
+            cloudCredentialsRef: JSON.stringify(
+              storageProvider === 'AZURE' ? { accountName: azureAccountName, accountKey: azureAccountKey } :
+              storageProvider === 'GCP' ? { projectId: gcpProjectId, clientEmail: gcpClientEmail, privateKey: gcpPrivateKey } :
+              {}
+            )
+          }
         })
       });
 
@@ -129,7 +161,6 @@ export default function SettingsAdminPage() {
     <>
       <StudioNavBar
         studioName="TheZora"
-        studioId={studioId}
         userEmail="owner@thezora.com"
         onLogout={() => {}}
       />
@@ -227,6 +258,116 @@ export default function SettingsAdminPage() {
                   />
                 </div>
               </div>
+            </div>
+          </section>
+        )}
+
+        {!isLoading && (
+          <section className="glass-card" style={{ padding: '3.5rem', maxWidth: '800px', border: '1px solid rgba(255,255,255,0.05)', marginTop: '2rem' }}>
+            <h2 style={{ fontSize: '1.5rem', marginBottom: '2.5rem', color: '#fff', fontFamily: 'var(--font-playfair)' }}>Cloud Storage Configuration</h2>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+              <div>
+                <label style={{ color: '#a1a1aa', display: 'block', marginBottom: '0.5rem', fontSize: '0.85rem', letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 600 }}>
+                  Storage Provider
+                </label>
+                <select 
+                  value={storageProvider} 
+                  onChange={(e) => setStorageProvider(e.target.value as any)}
+                  className="login-input"
+                  style={{ width: '100%', padding: '0.8rem 1rem' }}
+                >
+                  <option value="NONE">None</option>
+                  <option value="AZURE">Microsoft Azure</option>
+                  <option value="GCP">Google Cloud Platform</option>
+                </select>
+              </div>
+
+              {storageProvider !== 'NONE' && (
+                <div>
+                  <label style={{ color: '#a1a1aa', display: 'block', marginBottom: '0.5rem', fontSize: '0.85rem', letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 600 }}>
+                    {storageProvider === 'AZURE' ? 'Container Name' : 'Bucket Name'}
+                  </label>
+                  <input 
+                    type="text" 
+                    value={storageBucketName} 
+                    onChange={(e) => setStorageBucketName(e.target.value)} 
+                    className="login-input" 
+                    placeholder={storageProvider === 'AZURE' ? 'e.g. thezora-assets' : 'e.g. my-studio-bucket'}
+                    style={{ width: '100%', padding: '0.8rem 1rem' }} 
+                  />
+                </div>
+              )}
+
+              {storageProvider === 'AZURE' && (
+                <>
+                  <div>
+                    <label style={{ color: '#a1a1aa', display: 'block', marginBottom: '0.5rem', fontSize: '0.85rem', letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 600 }}>
+                      Account Name
+                    </label>
+                    <input 
+                      type="text" 
+                      value={azureAccountName} 
+                      onChange={(e) => setAzureAccountName(e.target.value)} 
+                      className="login-input" 
+                      style={{ width: '100%', padding: '0.8rem 1rem' }} 
+                    />
+                  </div>
+                  <div>
+                    <label style={{ color: '#a1a1aa', display: 'block', marginBottom: '0.5rem', fontSize: '0.85rem', letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 600 }}>
+                      Account Key
+                    </label>
+                    <input 
+                      type="password" 
+                      value={azureAccountKey} 
+                      onChange={(e) => setAzureAccountKey(e.target.value)} 
+                      className="login-input" 
+                      style={{ width: '100%', padding: '0.8rem 1rem' }} 
+                    />
+                  </div>
+                </>
+              )}
+
+              {storageProvider === 'GCP' && (
+                <>
+                  <div>
+                    <label style={{ color: '#a1a1aa', display: 'block', marginBottom: '0.5rem', fontSize: '0.85rem', letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 600 }}>
+                      Project ID
+                    </label>
+                    <input 
+                      type="text" 
+                      value={gcpProjectId} 
+                      onChange={(e) => setGcpProjectId(e.target.value)} 
+                      className="login-input" 
+                      style={{ width: '100%', padding: '0.8rem 1rem' }} 
+                    />
+                  </div>
+                  <div>
+                    <label style={{ color: '#a1a1aa', display: 'block', marginBottom: '0.5rem', fontSize: '0.85rem', letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 600 }}>
+                      Client Email
+                    </label>
+                    <input 
+                      type="email" 
+                      value={gcpClientEmail} 
+                      onChange={(e) => setGcpClientEmail(e.target.value)} 
+                      className="login-input" 
+                      style={{ width: '100%', padding: '0.8rem 1rem' }} 
+                    />
+                  </div>
+                  <div>
+                    <label style={{ color: '#a1a1aa', display: 'block', marginBottom: '0.5rem', fontSize: '0.85rem', letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 600 }}>
+                      Private Key
+                    </label>
+                    <textarea 
+                      value={gcpPrivateKey} 
+                      onChange={(e) => setGcpPrivateKey(e.target.value)} 
+                      className="login-input" 
+                      style={{ width: '100%', padding: '0.8rem 1rem', minHeight: '100px', fontFamily: 'monospace', fontSize: '0.8rem' }} 
+                      placeholder="-----BEGIN PRIVATE KEY-----\n..."
+                    />
+                  </div>
+                </>
+              )}
             </div>
           </section>
         )}

@@ -25,12 +25,11 @@ interface UploadFile {
 }
 
 interface Props {
-  studioId: string;
   eventId: string;
   onUploadComplete?: (files: { gcsObjectPath: string; filename: string; sizeBytes: number }[]) => void;
 }
 
-export default function UploadHandler({ studioId, eventId, onUploadComplete }: Props) {
+export default function UploadHandler({ eventId, onUploadComplete }: Props) {
   const [files, setFiles] = useState<UploadFile[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -38,11 +37,7 @@ export default function UploadHandler({ studioId, eventId, onUploadComplete }: P
   const [modelsLoaded, setModelsLoaded] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { 
-    gcpProjectId, gcpClientEmail, gcpPrivateKey, 
-    azureAccountName, azureAccountKey,
-    connectedProvider 
-  } = useCloudStore();
+  const { connectedProvider } = useCloudStore();
 
   // Load Face-API models on mount
   useEffect(() => {
@@ -145,14 +140,10 @@ export default function UploadHandler({ studioId, eventId, onUploadComplete }: P
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          studioId,
           eventId,
           filename: uploadFile.file.name,
           contentType: uploadFile.file.type,
           fileSizeBytes: uploadFile.file.size,
-          credentials: connectedProvider === "Azure" 
-            ? { accountName: azureAccountName, accountKey: azureAccountKey }
-            : { projectId: gcpProjectId, clientEmail: gcpClientEmail, privateKey: gcpPrivateKey },
         }),
       });
 
@@ -205,7 +196,6 @@ export default function UploadHandler({ studioId, eventId, onUploadComplete }: P
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          studioId,
           eventId,
           gcsObjectPath: storagePath, // We reuse the same DB field name for now
           filename: uploadFile.file.name,

@@ -12,7 +12,7 @@ interface Props {
 }
 
 export default function CloudConnectModal({ isOpen, onClose, provider }: Props) {
-  const { connectGCP, connectAWS, connectAzure, isConnecting, connectionError, setConnectionError } =
+  const { connectGCP, connectAWS, connectAzure, isConnecting, connectionError, setConnectionError, syncProviderFromDB } =
     useCloudStore();
 
   // GCP form state
@@ -68,6 +68,7 @@ export default function CloudConnectModal({ isOpen, onClose, provider }: Props) 
         });
       }
       setSuccess(true);
+      syncProviderFromDB();
       setTimeout(handleClose, 2000);
     } catch {
       // Error is already set in the store

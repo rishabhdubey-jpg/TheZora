@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getSession } from '@/lib/auth';
 
 /**
  * POST /api/storage/confirm
@@ -12,9 +13,14 @@ import { prisma } from '@/lib/prisma';
  */
 export async function POST(req: NextRequest) {
   try {
+    const session = await getSession();
+    if (!session || !session.studioId) {
+      return NextResponse.json({ error: 'Unauthorized: No active session' }, { status: 401 });
+    }
+
+    const studioId = session.studioId;
     const body = await req.json();
     const { 
-      studioId, 
       eventId, 
       gcsObjectPath, 
       filename, 
@@ -23,9 +29,9 @@ export async function POST(req: NextRequest) {
       faceDescriptors // Optional array of { descriptor: number[], boundingBox: any }
     } = body;
 
-    if (!studioId || !eventId || !gcsObjectPath || !filename || sizeBytes == null) {
+    if (!eventId || !gcsObjectPath || !filename || sizeBytes == null) {
       return NextResponse.json(
-        { error: 'Missing required fields.' },
+        { error: 'Missing required fields: eventId, gcsObjectPath, filename, sizeBytes' },
         { status: 400 }
       );
     }
@@ -58,13 +64,18 @@ export async function POST(req: NextRequest) {
 
       // 3. Save face descriptors if they exist
       if (faceDescriptors && Array.isArray(faceDescriptors) && faceDescriptors.length > 0) {
-        await tx.faceDescriptor.createMany({
-          data: faceDescriptors.map((face: any) => ({
-            photoId: photo.id,
-            descriptor: face.descriptor,
-            boundingBox: face.boundingBox || {},
-          })),
-        });
+        for (const face of faceDescriptors) {
+          const vectorString = `[${face.descriptor.join(',')}]`;
+          const id = `fd_${Math.random().toString(36).substring(2, 15)}`; // Simple unique ID
+          await tx.$executeRawUnsafe(
+            `INSERT INTO "face_descriptors" ("id", "photoId", "descriptor", "boundingBox", "createdAt") 
+             VALUES ($1, $2, $3::vector, $4, NOW())`,
+            id,
+            photo.id,
+            vectorString,
+            JSON.stringify(face.boundingBox || {})
+          );
+        }
       }
 
       return photo;

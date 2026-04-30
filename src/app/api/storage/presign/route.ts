@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generatePresignedUploadUrl } from '@/lib/CloudService';
 import { prisma } from '@/lib/prisma';
+import { getSession } from '@/lib/auth';
 
 /**
  * POST /api/storage/presign
@@ -16,12 +17,18 @@ export const maxDuration = 60; // Optional, just in case
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { studioId, eventId, filename, contentType, fileSizeBytes, credentials } = body;
+    const session = await getSession();
+    if (!session || !session.studioId) {
+      return NextResponse.json({ error: 'Unauthorized: No active session' }, { status: 401 });
+    }
 
-    if (!studioId || !eventId || !filename || !contentType || fileSizeBytes == null) {
+    const studioId = session.studioId;
+    const body = await req.json();
+    const { eventId, filename, contentType, fileSizeBytes, credentials } = body;
+
+    if (!eventId || !filename || !contentType || fileSizeBytes == null) {
       return NextResponse.json(
-        { error: 'Missing required fields.' },
+        { error: 'Missing required fields: eventId, filename, contentType, fileSizeBytes' },
         { status: 400 }
       );
     }
@@ -33,7 +40,7 @@ export async function POST(req: NextRequest) {
         storageBucketName: true,
         storageUsed: true,
         storageLimit: true,
-        cloudProvider: true,
+        storageProvider: true,
         cloudCredentialsRef: true,
       },
     });

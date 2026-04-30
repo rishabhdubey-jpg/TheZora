@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { generateUniqueAccessCode } from '@/lib/code-generator';
+import { getSession } from '@/lib/auth';
 
 /**
  * GET /api/admin/events
@@ -10,12 +11,11 @@ import { generateUniqueAccessCode } from '@/lib/code-generator';
  */
 export async function GET(req: NextRequest) {
   try {
-    const { searchParams } = new URL(req.url);
-    const studioId = searchParams.get('studioId');
-
-    if (!studioId) {
-      return NextResponse.json({ error: 'Missing studioId' }, { status: 400 });
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    const studioId = session.studioId;
 
     const events = await prisma.event.findMany({
       where: { studioId },
@@ -41,20 +41,32 @@ export async function GET(req: NextRequest) {
     });
 
     // Map to a cleaner format for the frontend
-    const results = events.map(e => ({
-      id: e.accessCode, // Using accessCode as display ID
-      dbId: e.id,
-      name: e.name,
-      mediaCount: e._count.photos,
-      cinematicVideoId: e.cinematicVideoId,
-      cinematicPoster: e.cinematicPosterUrl,
-      photos: e.photos.map(p => ({
-        id: p.id,
-        url: p.gcsPublicUrl || `/api/storage/proxy?path=${encodeURIComponent(p.gcsObjectPath)}&studioId=${e.studioId}`,
-        contentType: p.contentType,
-        isClientFavorite: p.isClientFavorite,
-      }))
-    }));
+    const results = events.map(e => {
+      let cinematicPoster = e.cinematicPosterUrl;
+      if (cinematicPoster && cinematicPoster.includes('studioId=')) {
+        cinematicPoster = cinematicPoster.replace(/studioId=[^&]+/, `studioId=${e.studioId}`);
+      }
+
+      let cinematicVideoId = e.cinematicVideoId;
+      if (cinematicVideoId && cinematicVideoId.includes('studioId=')) {
+        cinematicVideoId = cinematicVideoId.replace(/studioId=[^&]+/, `studioId=${e.studioId}`);
+      }
+
+      return {
+        id: e.accessCode, // Using accessCode as display ID
+        dbId: e.id,
+        name: e.name,
+        mediaCount: e._count.photos,
+        cinematicVideoId: cinematicVideoId,
+        cinematicPoster: cinematicPoster,
+        photos: e.photos.map(p => ({
+          id: p.id,
+          url: p.gcsPublicUrl || `/api/storage/proxy?path=${encodeURIComponent(p.gcsObjectPath)}&studioId=${e.studioId}`,
+          contentType: p.contentType,
+          isClientFavorite: p.isClientFavorite,
+        }))
+      };
+    });
 
     return NextResponse.json(results);
   } catch (error: any) {
@@ -83,11 +95,17 @@ export async function GET(req: NextRequest) {
  */
 export async function POST(req: NextRequest) {
   try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    const studioId = session.studioId;
+    
     const body = await req.json();
-    const { studioId, name } = body;
+    const { name } = body;
     let { accessCode } = body;
 
-    if (!studioId || !name) {
+    if (!name) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
@@ -125,12 +143,17 @@ export async function POST(req: NextRequest) {
  */
 export async function DELETE(req: NextRequest) {
   try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    const studioId = session.studioId;
+
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id'); // Internal dbId
-    const studioId = searchParams.get('studioId');
 
-    if (!id || !studioId) {
-      return NextResponse.json({ error: 'Missing required parameters (id, studioId)' }, { status: 400 });
+    if (!id) {
+      return NextResponse.json({ error: 'Missing required parameters (id)' }, { status: 400 });
     }
 
     // 1. Fetch event and its photos to get GCS paths and sizes

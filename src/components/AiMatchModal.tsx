@@ -23,33 +23,36 @@ export default function AiMatchModal({ onClose, onMatchSuccess }: Props) {
 
   useEffect(() => {
     let cancelled = false;
-    
-    // 10 Second Safety Timeout
+
+    // 30 Second Safety Timeout (Optimized for CPU backend)
     const timeout = setTimeout(() => {
       if (!modelsLoaded && !cancelled) {
-        console.error('[AiMatchModal] Initialization timeout exceeded (10s)');
+        console.error('[AiMatchModal] Initialization timeout exceeded (30s)');
         setHasError(true);
         setStatusText('Calibration stalled. Please refresh.');
       }
-    }, 10000);
+    }, 30000);
 
     const load = async () => {
       try {
         setStatusText('Calibrating AI...');
         const fa = await import('@vladmandic/face-api');
-        
-        // TF Backend Hardening
         const tf = fa.tf as any;
+
+        // Force hardware acceleration
         try {
-          console.log('[AiMatchModal] Initializing Neural Engine: Attempting WebGL acceleration...');
           await tf.setBackend('webgl');
+          await tf.ready();
         } catch (e) {
-          console.warn('[AiMatchModal] WebGL acceleration unavailable, falling back to CPU engine:', e);
-          await tf.setBackend('cpu');
+          console.warn('[AiMatchModal] WebGL failed, falling back to WASM/CPU');
+          try {
+            await tf.setBackend('wasm');
+            await tf.ready();
+          } catch {
+            await tf.setBackend('cpu');
+          }
         }
-        
-        // Await TF readiness and confirm backend
-        await tf.ready();
+
         console.log(`[AiMatchModal] Neural Engine Active. Backend: ${tf.getBackend().toUpperCase()}`);
 
         // Fast-track with TinyFaceDetector (~200KB vs ~5MB)
@@ -76,34 +79,36 @@ export default function AiMatchModal({ onClose, onMatchSuccess }: Props) {
       }
     };
     load();
-    return () => { 
-      cancelled = true; 
+    return () => {
+      cancelled = true;
       clearTimeout(timeout);
     };
   }, [modelsLoaded]);
 
   const capture = useCallback(() => {
-    if (!modelsLoaded || !faceapi) return;
+    if (!modelsLoaded || !faceapi || isAnalyzing) return;
     const screenshot = webcamRef.current?.getScreenshot();
     if (screenshot) {
       setImageSrc(screenshot);
       runDetection(screenshot);
     }
-  }, [modelsLoaded, faceapi]);
+  }, [modelsLoaded, faceapi, isAnalyzing]);
 
   const runDetection = async (dataUrl: string) => {
     setIsAnalyzing(true);
     setStatusText('Isolating Facial Signatures...');
     try {
       const img = new window.Image();
+      img.crossOrigin = 'anonymous';
       img.src = dataUrl;
       await new Promise<void>((resolve, reject) => {
         img.onload = () => resolve();
         img.onerror = () => reject(new Error('Image failed to render'));
       });
 
-      // Use TinyFaceDetectorOptions for sub-second analysis
-      const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.5 });
+      // Use TinyFaceDetectorOptions with optimized input size
+      // Downscaling to 224 for instant inference
+      const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.35 });
       const detection = await faceapi
         .detectSingleFace(img, options)
         .withFaceLandmarks()
@@ -118,7 +123,8 @@ export default function AiMatchModal({ onClose, onMatchSuccess }: Props) {
       }
 
       setStatusText(`Neural signatures verified.`);
-      await new Promise(r => setTimeout(r, 800));
+      // Reduced delay for "instant" feel
+      await new Promise(r => setTimeout(r, 400));
       onMatchSuccess(detection.descriptor);
     } catch (err) {
       console.error('[AiMatchModal] Detection crash:', err);
@@ -140,92 +146,92 @@ export default function AiMatchModal({ onClose, onMatchSuccess }: Props) {
             </DialogDescription>
           </DialogHeader>
 
+
           <div className="space-y-8">
-             {!imageSrc ? (
-               <div className="space-y-8">
-                 <div className="aspect-square bg-black border border-zinc-900 overflow-hidden relative group">
-                    <Webcam
-                      audio={false}
-                      ref={webcamRef}
-                      screenshotFormat="image/jpeg"
-                      videoConstraints={{ facingMode: 'user', width: 480, height: 480 }}
-                      className="w-full h-full object-cover grayscale transition-all duration-700 opacity-60 group-hover:opacity-90 group-hover:grayscale-0"
-                    />
-                    {/* Scanner Lines overlay */}
-                    <div className="absolute inset-0 bg-gradient-to-b from-transparent via-zinc-500/5 to-transparent pointer-events-none animate-scan" />
-                    <div className="absolute top-0 left-0 w-4 h-4 border-t border-l border-zinc-700" />
-                    <div className="absolute bottom-0 right-0 w-4 h-4 border-b border-r border-zinc-700" />
-                 </div>
-                 
-                 <div className="space-y-5">
-                    <p className="text-zinc-500 text-center text-[11px] leading-relaxed px-4 font-light">
-                      Position your face within the optic frame. Our AI will filter this collection to isolate only the moments you appear in.
-                    </p>
-                    
-                    <Button 
-                      onClick={capture} 
-                      disabled={!modelsLoaded || hasError}
-                      className={`w-full h-14 rounded-none text-[10px] tracking-[0.2em] uppercase transition-all duration-500 border ${
-                        hasError 
-                          ? 'bg-zinc-950 border-red-900 text-red-700' 
-                          : 'bg-white text-black hover:bg-zinc-200 border-transparent'
+            {!imageSrc ? (
+              <div className="space-y-8">
+                <div className="aspect-square bg-black border border-zinc-900 overflow-hidden relative group">
+                  <Webcam
+                    audio={false}
+                    ref={webcamRef}
+                    screenshotFormat="image/jpeg"
+                    videoConstraints={{ width: 320, height: 320, facingMode: 'user' }}
+                    className="w-full h-full object-cover grayscale transition-all duration-700 opacity-60 group-hover:opacity-90 group-hover:grayscale-0"
+                  />
+                  {/* Scanner Lines overlay */}
+                  <div className="absolute inset-0 bg-gradient-to-b from-transparent via-zinc-500/5 to-transparent pointer-events-none animate-scan" />
+                  <div className="absolute top-0 left-0 w-4 h-4 border-t border-l border-zinc-700" />
+                  <div className="absolute bottom-0 right-0 w-4 h-4 border-b border-r border-zinc-700" />
+                </div>
+
+                <div className="space-y-5">
+                  <p className="text-zinc-500 text-center text-[11px] leading-relaxed px-4 font-light">
+                    Position your face within the optic frame. Our AI will filter this collection to isolate only the moments you appear in.
+                  </p>
+
+                  <Button
+                    onClick={capture}
+                    disabled={!modelsLoaded || hasError}
+                    className={`w-full h-14 rounded-none text-[10px] tracking-[0.2em] uppercase transition-all duration-500 border ${hasError
+                        ? 'bg-zinc-950 border-red-900 text-red-700'
+                        : 'bg-white text-black hover:bg-zinc-200 border-transparent'
                       }`}
-                    >
-                      {modelsLoaded ? (
-                        <>
-                          <Camera className="w-3.5 h-3.5 mr-2" />
-                          Initiate Scan
-                        </>
-                      ) : hasError ? (
-                        <>
-                          <AlertCircle className="w-3.5 h-3.5 mr-2" />
-                          Initialization Failed - Check Console
-                        </>
-                      ) : (
-                        <>
-                          <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" />
-                          Calibrating AI
-                        </>
-                      )}
-                    </Button>
-                 </div>
-               </div>
-             ) : (
-               <div className="space-y-8">
-                  <div className="aspect-square bg-black border border-zinc-900 overflow-hidden relative">
-                    <img
-                      src={imageSrc}
-                      alt="Neural Input"
-                      className={`w-full h-full object-cover transition-all duration-1000 ${isAnalyzing ? 'opacity-20 grayscale scale-110 blur-xl' : ''}`}
-                    />
-                    {isAnalyzing && (
-                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-6">
-                        <Loader2 className="w-12 h-12 text-zinc-400 animate-spin stroke-[1]" />
-                        <div className="flex flex-col items-center gap-2">
-                           <span className="text-[9px] tracking-[0.4em] uppercase text-zinc-400 animate-pulse">{statusText}</span>
-                           <div className="w-24 h-[1px] bg-zinc-900 overflow-hidden">
-                              <div className="w-full h-full bg-zinc-500 animate-progress" />
-                           </div>
+                  >
+                    {modelsLoaded ? (
+                      <>
+                        <Camera className="w-3.5 h-3.5 mr-2" />
+                        Initiate Scan
+                      </>
+                    ) : hasError ? (
+                      <>
+                        <AlertCircle className="w-3.5 h-3.5 mr-2" />
+                        Initialization Failed - Check Console
+                      </>
+                    ) : (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" />
+                        Calibrating AI
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-8">
+                <div className="aspect-square bg-black border border-zinc-900 overflow-hidden relative">
+                  <img
+                    src={imageSrc}
+                    alt="Neural Input"
+                    className={`w-full h-full object-cover transition-all duration-1000 ${isAnalyzing ? 'opacity-20 grayscale scale-110 blur-xl' : ''}`}
+                  />
+                  {isAnalyzing && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-6">
+                      <Loader2 className="w-12 h-12 text-zinc-400 animate-spin stroke-[1]" />
+                      <div className="flex flex-col items-center gap-2">
+                        <span className="text-[9px] tracking-[0.4em] uppercase text-zinc-400 animate-pulse">{statusText}</span>
+                        <div className="w-24 h-[1px] bg-zinc-900 overflow-hidden">
+                          <div className="w-full h-full bg-zinc-500 animate-progress" />
                         </div>
                       </div>
-                    )}
-                  </div>
-                  
-                  {!isAnalyzing && (
-                     <Button 
-                      variant="outline"
-                      onClick={() => setImageSrc(null)}
-                      className="w-full h-14 border-zinc-900 text-zinc-500 hover:text-white hover:bg-zinc-950 rounded-none text-[10px] tracking-[0.2em] uppercase transition-all"
-                    >
-                      <RefreshCcw className="w-3.5 h-3.5 mr-2" />
-                      Re-calibrate
-                    </Button>
+                    </div>
                   )}
-               </div>
-             )}
+                </div>
+
+                {!isAnalyzing && (
+                  <Button
+                    variant="outline"
+                    onClick={() => setImageSrc(null)}
+                    className="w-full h-14 border-zinc-900 text-zinc-500 hover:text-white hover:bg-zinc-950 rounded-none text-[10px] tracking-[0.2em] uppercase transition-all"
+                  >
+                    <RefreshCcw className="w-3.5 h-3.5 mr-2" />
+                    Re-calibrate
+                  </Button>
+                )}
+              </div>
+            )}
           </div>
         </div>
-        
+
         {/* Aesthetic footer detail */}
         <div className="h-[1px] bg-gradient-to-r from-transparent via-zinc-800 to-transparent opacity-30" />
       </DialogContent>

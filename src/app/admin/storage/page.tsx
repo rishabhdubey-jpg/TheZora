@@ -4,13 +4,12 @@ import StudioNavBar from '@/components/StudioNavBar';
 import { Database } from "lucide-react";
 
 export default function StorageAdminPage() {
-  const studioId = "demo-studio";
   
   return (
     <>
       <StudioNavBar
         studioName="TheZora"
-        studioId={studioId}
+
         userEmail="owner@thezora.com"
         onLogout={() => {}}
       />

@@ -4,16 +4,14 @@ import StudioNavBar from '@/components/StudioNavBar';
 import { BarChart3 } from "lucide-react";
 
 export default function AnalyticsAdminPage() {
-  const studioId = "demo-studio";
-  
   return (
     <>
       <StudioNavBar
         studioName="TheZora"
-        studioId={studioId}
         userEmail="owner@thezora.com"
         onLogout={() => {}}
       />
+
       
       <main className="container animate-fade-up" style={{ paddingTop: '2rem', minHeight: '100vh', paddingBottom: '5rem' }}>
         <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '3.5rem', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '2.5rem' }}>

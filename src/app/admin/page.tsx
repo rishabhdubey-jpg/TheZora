@@ -61,12 +61,11 @@ export default function AdminDashboard() {
   const [activeSubTab, setActiveSubTab] = useState<'media'|'cinematic'>('media');
   const [activeEventId, setActiveEventId] = useState<string>(''); // Access Code
 
-  const studioId = "demo-studio"; // In a real app, this would come from a session
 
   const fetchEvents = useCallback(async () => {
     setIsLoadingEvents(true);
     try {
-      const res = await fetch(`/api/admin/events?studioId=${studioId}`);
+      const res = await fetch(`/api/admin/events`);
       if (res.ok) {
         const data = await res.json();
         setEvents(data);
@@ -80,7 +79,7 @@ export default function AdminDashboard() {
       setIsLoadingEvents(false);
       setIsLoaded(true);
     }
-  }, [studioId, activeEventId]);
+  }, [activeEventId]);
 
   // Initialization
   useEffect(() => {
@@ -140,7 +139,6 @@ export default function AdminDashboard() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          studioId,
           name: newEventName,
         })
       });
@@ -169,7 +167,7 @@ export default function AdminDashboard() {
     const toastId = toast.loading("Purging cloud artifacts...");
     
     try {
-      const res = await fetch(`/api/admin/events?id=${dbId}&studioId=${studioId}`, {
+      const res = await fetch(`/api/admin/events?id=${dbId}`, {
         method: 'DELETE',
       });
 
@@ -256,7 +254,6 @@ export default function AdminDashboard() {
     <>
       <StudioNavBar
         studioName="TheZora"
-        studioId={studioId}
         userEmail="owner@thezora.com"
         onLogout={() => setIsAdminLoggedIn(false)}
         onStorageDisconnect={handleStorageDisconnect}
@@ -305,7 +302,7 @@ export default function AdminDashboard() {
         {activeAdminTab === 'dashboard' && (
           <div className="animate-fade-up space-y-24">
             <section className="bg-zinc-950 border border-zinc-900 p-8">
-              <StorageHealthWidget studioId={studioId} plan="ENTERPRISE" />
+              <StorageHealthWidget plan="ENTERPRISE" />
             </section>
 
             {connectedProvider && (
@@ -359,6 +356,15 @@ export default function AdminDashboard() {
                             <DropdownMenuContent align="end" className="bg-zinc-950 border-zinc-900 text-zinc-400 rounded-none w-56">
                               <DropdownMenuLabel className="text-[10px] uppercase tracking-[0.2em]">Management</DropdownMenuLabel>
                               <DropdownMenuSeparator className="bg-zinc-900" />
+                              <DropdownMenuItem 
+                                className="focus:text-white focus:bg-zinc-900 cursor-pointer text-xs" 
+                                onClick={() => window.open(`/admin/events/${ev.dbId}/print`, '_blank')}
+                              >
+                                <div className="flex items-center gap-3">
+                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+                                  Print Table Cards
+                                </div>
+                              </DropdownMenuItem>
                               <AlertDialogTrigger asChild>
                                 <DropdownMenuItem className="text-red-900 focus:text-red-400 focus:bg-red-900/10 cursor-pointer text-xs">
                                   <Trash2 size={14} className="mr-3" />
@@ -440,7 +446,6 @@ export default function AdminDashboard() {
                       {activeEvent ? (
                         <div className="bg-black border border-zinc-900 p-8">
                           <UploadHandler 
-                            studioId={studioId} 
                             eventId={activeEvent.dbId} 
                             onUploadComplete={() => fetchEvents()} 
                           />

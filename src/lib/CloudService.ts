@@ -5,6 +5,7 @@ import {
   BlobSASPermissions,
   SASProtocol,
 } from '@azure/storage-blob';
+import { Storage } from '@google-cloud/storage';
 
 /**
  * CloudService
@@ -166,9 +167,46 @@ export async function deleteStorageObject(
 }
 
 /**
- * Generates a SAS URL for reading a blob.
+ * Generates a signed URL for reading a blob from GCP.
  */
-export async function generatePresignedReadUrl(
+export async function generateGcsPresignedReadUrl(
+  bucketName: string,
+  blobPath: string,
+  credentials: any,
+  expiresInSeconds: number = 3600
+): Promise<string> {
+  const projectId = credentials.projectId || credentials.project_id;
+  const clientEmail = credentials.clientEmail || credentials.client_email;
+  const privateKey = (credentials.privateKey || credentials.private_key || '').replace(/\\n/g, '\n');
+
+  if (!projectId || !clientEmail || !privateKey) {
+    throw new Error('Incomplete GCP configuration');
+  }
+
+  const storage = new Storage({
+    projectId,
+    credentials: {
+      client_email: clientEmail,
+      private_key: privateKey,
+    }
+  });
+
+  const [url] = await storage
+    .bucket(bucketName)
+    .file(blobPath)
+    .getSignedUrl({
+      version: 'v4',
+      action: 'read',
+      expires: Date.now() + expiresInSeconds * 1000,
+    });
+
+  return url;
+}
+
+/**
+ * Generates a SAS URL for reading a blob from Azure.
+ */
+export async function generateAzurePresignedReadUrl(
   containerName: string,
   blobPath: string,
   credentials: StudioCredentials,
@@ -189,6 +227,23 @@ export async function generatePresignedReadUrl(
   }, sharedKeyCredential).toString();
 
   return `https://${accountName}.blob.core.windows.net/${containerName}/${blobPath}?${sasToken}`;
+}
+
+/**
+ * Universal read URL generator
+ */
+export async function generatePresignedReadUrl(
+  provider: 'GCP' | 'AZURE' | string,
+  bucketName: string,
+  blobPath: string,
+  credentials: any,
+  expiresInSeconds: number = 3600
+): Promise<string> {
+  if (provider === 'GCP') {
+    return generateGcsPresignedReadUrl(bucketName, blobPath, credentials, expiresInSeconds);
+  } else {
+    return generateAzurePresignedReadUrl(bucketName, blobPath, credentials, expiresInSeconds);
+  }
 }
 
 /**

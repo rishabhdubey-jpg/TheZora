@@ -3,14 +3,20 @@
 // ORM: Prisma
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "postgresql"
+  provider   = "postgresql"
+  extensions = [pgvector(map: "vector")]
 }
 
-// ==================== ENUMS ====================
+enum AccountStatus {
+  PENDING
+  ACTIVE
+  BLOCKED
+}
 
 enum Plan {
   FREE
@@ -24,23 +30,27 @@ enum CloudProvider {
   AZURE
 }
 
-
 // ==================== MODELS ====================
 
 model Studio {
   id          String   @id @default(cuid())
   name        String
+  slug        String?  @unique
   email       String   @unique
   plan        Plan     @default(FREE)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  password              String?       // Hashed password for login
+  isSuperAdmin          Boolean       @default(false)
+  accountStatus         AccountStatus @default(PENDING)
+  
   // Storage fields
   storagePath           String?       // e.g. "gs://bucket-{studioId}/"
   storageLimit          BigInt        @default(10737418240) // 10 GB default
   storageUsed           BigInt        @default(0)           // Bytes used (atomic incremented)
   storageBucketName     String?       // The GCS bucket name for this studio
-  cloudProvider         CloudProvider @default(NONE)
+  storageProvider       CloudProvider @default(NONE)
   cloudCredentialsRef   String?       // Encrypted reference / secret key name in Secret Manager
   autoArchiveColdStorage Boolean      @default(false)        // Only for Pro plan
   brandConfig           Json?         // Custom brand settings (e.g. { logoUrl, primaryColor })
@@ -98,8 +108,8 @@ model FaceDescriptor {
   photoId     String
   photo       Photo    @relation(fields: [photoId], references: [id], onDelete: Cascade)
 
-  // The 128-float descriptor from face-api.js stored as a JSON array
-  descriptor  Float[]
+  // pgvector(128) for high-performance biometric searches
+  descriptor  Unsupported("vector(128)")
 
   boundingBox Json?    // { x, y, width, height }
 

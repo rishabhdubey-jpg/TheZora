@@ -35,12 +35,13 @@ export interface CloudStorageState {
   studioId: string | null;
 
   // Actions
-  setStudioId: (id: string) => void;
+  setStudioId: (id: string | undefined) => void;
   connectGCP: (creds: { projectId: string; clientEmail: string; privateKey: string; bucketName: string }) => Promise<void>;
   connectAWS: (creds: { accessKeyId: string; secretAccessKey: string; region: string; bucketName: string }) => Promise<void>;
   connectAzure: (creds: { accountName: string; accountKey: string; containerName: string; sasToken?: string }) => Promise<void>;
   disconnect: () => void;
-  refreshStorageUsage: (studioId: string) => Promise<void>;
+  refreshStorageUsage: () => Promise<void>;
+  syncProviderFromDB: () => Promise<void>;
   setConnectionError: (error: string | null) => void;
 }
 
@@ -71,14 +72,10 @@ export const useCloudStore = create<CloudStorageState>()(
       connectGCP: async (creds) => {
         set({ isConnecting: true, connectionError: null });
         try {
-          const { studioId } = get();
-          if (!studioId) throw new Error('No studio ID set.');
-
           const response = await fetch('/api/storage/provision', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              studioId,
               provider: 'GCP',
               credentials: creds,
             }),
@@ -133,14 +130,10 @@ export const useCloudStore = create<CloudStorageState>()(
       connectAzure: async (creds) => {
         set({ isConnecting: true, connectionError: null });
         try {
-          const { studioId } = get();
-          if (!studioId) throw new Error('No studio ID set.');
-
           const response = await fetch('/api/storage/provision', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              studioId,
               provider: 'AZURE',
               credentials: {
                 accountName: creds.accountName,
@@ -191,9 +184,9 @@ export const useCloudStore = create<CloudStorageState>()(
         });
       },
 
-      refreshStorageUsage: async (studioId: string) => {
+      refreshStorageUsage: async () => {
         try {
-          const res = await fetch(`/api/storage/usage?studioId=${studioId}`);
+          const res = await fetch('/api/storage/usage');
           if (res.ok) {
             const data = await res.json();
             set({
@@ -203,6 +196,25 @@ export const useCloudStore = create<CloudStorageState>()(
           }
         } catch (err) {
           console.warn('[CloudStore] Failed to refresh storage usage:', err);
+        }
+      },
+
+      syncProviderFromDB: async () => {
+        try {
+          const res = await fetch('/api/admin/settings');
+          if (!res.ok) return;
+          const data = await res.json();
+          const provider = data.cloudConfig?.storageProvider;
+          const hasCredentials = !!data.cloudConfig?.cloudCredentialsRef;
+          // Map DB provider enum to store's CloudProviderType
+          const mapped: CloudProviderType =
+            hasCredentials && provider === 'AZURE' ? 'Azure'
+            : hasCredentials && provider === 'GCP' ? 'GCP'
+            : hasCredentials && provider === 'AWS' ? 'AWS'
+            : null;
+          set({ connectedProvider: mapped });
+        } catch (err) {
+          console.warn('[CloudStore] Failed to sync provider from DB:', err);
         }
       },
 

@@ -1,17 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getSession } from '@/lib/auth';
 
 /**
- * GET /api/storage/usage?studioId=xxx
+ * GET /api/storage/usage
  *
- * Returns the current storage usage and limit for a studio.
+ * Returns the current storage usage and limit for the authenticated studio.
+ * Resolves studioId from the JWT session cookie — no query param required.
  */
 export async function GET(req: NextRequest) {
-  const studioId = req.nextUrl.searchParams.get('studioId');
-
-  if (!studioId) {
-    return NextResponse.json({ error: 'Missing studioId parameter.' }, { status: 400 });
+  const session = await getSession();
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  const studioId = session.studioId;
 
   const studio = await prisma.studio.findUnique({
     where: { id: studioId },

@@ -10,7 +10,6 @@ import { cn } from "@/lib/utils";
 interface HeaderProps {
   isGallery?: boolean;
   studioName?: string;
-  logoUrl?: string;
   eventName?: string;
   onLoginClick?: () => void;
   onLogoutClick?: () => void;
@@ -19,7 +18,6 @@ interface HeaderProps {
 export default function Header({
   isGallery = false,
   studioName = "TheZora",
-  logoUrl,
   eventName,
   onLoginClick,
   onLogoutClick,
@@ -42,28 +40,16 @@ export default function Header({
     >
       <div className="max-w-7xl mx-auto flex items-center justify-between">
         {/* Logo */}
-        <Link href="/" className="flex-shrink-0 group">
-          {logoUrl ? (
-            <motion.img
-              src={logoUrl}
-              alt="Logo"
-              className="h-8 md:h-12 w-auto object-contain transition-transform group-hover:scale-105"
-              whileHover={{ scale: 1.05 }}
-            />
-          ) : (
-            <motion.span 
-              className="text-white font-serif text-xl md:text-2xl tracking-tighter uppercase font-medium"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-            >
-              {studioName === "TheZora" ? (
-                <>
-                  <span className="font-light opacity-50">The</span>
-                  <span className="font-bold">Zora</span>
-                </>
-              ) : studioName}
-            </motion.span>
-          )}
+        <Link href="/" className="flex-shrink-0 group" aria-label="TheZora - Capture. Automate. Scale.">
+          {/* Static Primary Branding */}
+          <motion.div 
+            className="flex items-center"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+          >
+            <span className="text-zinc-500 font-serif text-xl md:text-2xl tracking-tighter uppercase font-medium">The</span>
+            <span className="text-white font-serif text-xl md:text-2xl tracking-tighter uppercase font-bold ml-0.5">Zora</span>
+          </motion.div>
         </Link>
 
         {/* Desktop Nav */}
@@ -103,6 +89,9 @@ export default function Header({
                 </Link>
                 <Link href="#about" className="text-zinc-400 hover:text-white text-xs tracking-[0.2em] uppercase transition-colors">
                   Our Approach
+                </Link>
+                <Link href="/admin" className="text-zinc-500 hover:text-white text-xs tracking-[0.2em] uppercase transition-colors border-l border-zinc-800 pl-8 ml-4">
+                  Studio Portal
                 </Link>
                 
                 {/* Premium Login Button with Spotlight effect */}
@@ -150,7 +139,8 @@ export default function Header({
               <>
                 <Link href="#portfolio" onClick={() => setMobileMenuOpen(false)} className="text-white text-lg tracking-widest uppercase">Portfolio</Link>
                 <Link href="#about" onClick={() => setMobileMenuOpen(false)} className="text-white text-lg tracking-widest uppercase">Our Approach</Link>
-                <Button variant="outline" className="border-zinc-800 text-white" onClick={onLoginClick}>Client Login</Button>
+                <Link href="/admin" onClick={() => setMobileMenuOpen(false)} className="text-zinc-500 text-lg tracking-widest uppercase">Studio Portal</Link>
+                <Button variant="outline" className="border-zinc-800 text-white w-full" onClick={onLoginClick}>Client Login</Button>
               </>
             )}
           </motion.div>

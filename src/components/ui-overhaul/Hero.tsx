@@ -32,7 +32,7 @@ export default function Hero({ onUnlockClick }: HeroProps) {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, ease: "easeOut" }}
         >
-          Exclusive Fine Art Photography
+          Capture. Automate. Scale.
         </motion.span>
         
         <motion.h1 
@@ -41,17 +41,17 @@ export default function Hero({ onUnlockClick }: HeroProps) {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 1, ease: "easeOut", delay: 0.2 }}
         >
-          Capturing <span className="italic">Eternal</span> <br className="hidden md:block" /> Love in Motion
+          Elevating the Art of <br className="hidden md:block" /> <span className="italic">Studio Management</span>
         </motion.h1>
         
         <motion.p 
-          className="text-zinc-400 text-base md:text-xl font-light tracking-wide max-w-xl mx-auto mb-12 leading-relaxed"
+          className="text-zinc-400 text-base md:text-xl font-light tracking-wide max-w-2xl mx-auto mb-12 leading-relaxed"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 1, ease: "easeOut", delay: 0.4 }}
         >
-          Cinematic storytelling for the modern couple who <br className="hidden md:block" /> 
-          values the art of the moment.
+          The future of AI-powered photography galleries. Deliver high-fidelity <br className="hidden md:block" /> 
+          memories with automated face-recognition and premium branding.
         </motion.p>
         
         <motion.div
@@ -67,13 +67,13 @@ export default function Hero({ onUnlockClick }: HeroProps) {
             Unlock Your Gallery
           </Button>
           <Button 
-            variant="ghost"
-            className="text-zinc-400 hover:text-white hover:bg-transparent rounded-none px-10 py-7 text-xs tracking-[0.2em] uppercase border border-transparent hover:border-zinc-800 transition-all duration-300"
+            variant="outline"
+            className="text-white border-zinc-800 hover:border-white rounded-none px-10 py-7 text-xs tracking-[0.2em] uppercase transition-all duration-300"
             onClick={() => {
-                document.getElementById('portfolio')?.scrollIntoView({ behavior: 'smooth' });
+                window.location.href = '/admin';
             }}
           >
-            View Portfolio
+            Get Started for Studios
           </Button>
         </motion.div>
       </div>

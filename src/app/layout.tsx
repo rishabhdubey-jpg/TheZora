@@ -7,8 +7,8 @@ const playfair = Playfair_Display({ subsets: ['latin'], variable: '--font-playfa
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
 export const metadata: Metadata = {
-  title: 'TheZora | AI Studio Management & Gallery',
-  description: 'The definitive platform for artistic studio management and private guest galleries.',
+  title: 'TheZora: Capture. Automate. Scale.',
+  description: 'TheZora is a luxury SaaS platform for photographers, offering AI-powered gallery delivery and unified studio management.',
   icons: {
     icon: '/icon.png',
     shortcut: '/icon.png',

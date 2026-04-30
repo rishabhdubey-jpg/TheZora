@@ -6,10 +6,10 @@ export const dynamic = 'force-dynamic';
 
 export async function PATCH(
   request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ accessCode: string }> }
 ) {
   // 1. Next.js 16 requirements: await the params promise
-  const { id: photoId } = await params;
+  const { accessCode: photoId } = await params;
 
   try {
     // 2. JSON Body Parsing: Extract explicit state from the request

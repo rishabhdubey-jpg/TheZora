@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { useCloudStore } from "@/lib/cloudStore";
 import CloudConnectModal from "./CloudConnectModal";
+import { logoutStudio } from "@/app/actions/auth";
 
 const NAV_LINKS = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
@@ -40,13 +41,13 @@ interface Props {
 
 export default function StudioNavBar({
   studioName = "TheZora",
-  studioId = "demo-studio",
+  studioId,
   userEmail = "owner@thezora.com",
   onLogout,
   onStorageDisconnect,
 }: Props) {
   const pathname = usePathname();
-  const { connectedProvider, storageUsedBytes, storageLimitBytes, disconnect, setStudioId } =
+  const { connectedProvider, storageUsedBytes, storageLimitBytes, disconnect, syncProviderFromDB } =
     useCloudStore();
 
   const [cloudDropdownOpen, setCloudDropdownOpen] = useState(false);
@@ -60,8 +61,10 @@ export default function StudioNavBar({
   const userRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    setStudioId(studioId);
-  }, [studioId, setStudioId]);
+    // Sync actual cloud connection state from the database so the
+    // badge never shows stale localStorage data for a fresh studio.
+    syncProviderFromDB();
+  }, [syncProviderFromDB]);
 
   // Scroll detection for navbar shadow
   useEffect(() => {
@@ -319,7 +322,10 @@ export default function StudioNavBar({
                     <span style={{ color: "#a1a1aa", fontSize: "0.85rem" }}>{userEmail}</span>
                   </div>
                   {onLogout && (
-                    <button onClick={onLogout} style={{ background: "none", border: "none", color: "#52525b", cursor: "pointer" }}>
+                    <button onClick={() => {
+                      onLogout();
+                      logoutStudio();
+                    }} style={{ background: "none", border: "none", color: "#52525b", cursor: "pointer" }}>
                       <LogOut size={16} />
                     </button>
                   )}
@@ -477,7 +483,10 @@ function UserDropdown({
         </Link>
         {onLogout && (
           <button
-            onClick={onLogout}
+            onClick={() => {
+              if (onLogout) onLogout();
+              logoutStudio();
+            }}
             style={{ width: "100%", display: "flex", alignItems: "center", gap: "0.6rem", padding: "0.65rem 0.75rem", borderRadius: "6px", color: "#ef4444", background: "none", border: "none", fontSize: "0.875rem", cursor: "pointer" }}
           >
             <LogOut size={14} />

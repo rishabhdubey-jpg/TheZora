@@ -1,21 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { provisionStudioBucket } from '@/lib/CloudService';
 import { prisma } from '@/lib/prisma';
+import { getSession } from '@/lib/auth';
 
 /**
  * POST /api/storage/provision
  * 
- * Triggered when a studio owner connects their GCP account.
- * Creates a dedicated GCS bucket for the studio and records the path in the DB.
+ * Triggered when a studio owner connects their cloud account.
+ * Creates a dedicated storage bucket/container and records it in the DB.
  */
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { studioId, provider, credentials } = body;
+    const session = await getSession();
+    if (!session || !session.studioId) {
+      return NextResponse.json({ error: 'Unauthorized: No active session' }, { status: 401 });
+    }
 
-    if (!studioId || !provider || !credentials) {
+    const studioId = session.studioId;
+    const body = await req.json();
+    const { provider, credentials } = body;
+
+    if (!provider || !credentials) {
       return NextResponse.json(
-        { error: 'Missing required fields: studioId, provider, credentials' },
+        { error: 'Missing required fields: provider, credentials' },
         { status: 400 }
       );
     }
@@ -39,7 +46,7 @@ export async function POST(req: NextRequest) {
       data: {
         storageBucketName: bucketName,
         storagePath,
-        cloudProvider: 'AZURE',
+        storageProvider: 'AZURE',
         cloudCredentialsRef: JSON.stringify(credentials), // Persist Azure credentials
       },
     });

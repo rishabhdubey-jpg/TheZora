@@ -53,7 +53,9 @@ export const useFaceRecognition = () => {
         faceapi.draw.drawDetections(canvasElement, resized);
         faceapi.draw.drawFaceLandmarks(canvasElement, resized);
       }
-      requestAnimationFrame(task);
+      setTimeout(() => {
+        requestAnimationFrame(task);
+      }, 200);
     };
 
     task();
