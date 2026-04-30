@@ -11,6 +11,7 @@ interface HeaderProps {
   isGallery?: boolean;
   studioName?: string;
   eventName?: string;
+  logoUrl?: string;
   onLoginClick?: () => void;
   onLogoutClick?: () => void;
 }
@@ -19,6 +20,7 @@ export default function Header({
   isGallery = false,
   studioName = "TheZora",
   eventName,
+  logoUrl,
   onLoginClick,
   onLogoutClick,
 }: HeaderProps) {
