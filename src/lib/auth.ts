@@ -24,7 +24,22 @@ export async function signToken(payload: SessionPayload): Promise<string> {
 export async function verifyToken(token: string): Promise<SessionPayload | null> {
   try {
     const { payload } = await jwtVerify(token, secretKey);
-    return payload as unknown as SessionPayload;
+    const session = payload as unknown as SessionPayload;
+
+    // --- ADD THIS CHECK HERE ---
+    // Import your prisma client at the top if not already there
+    const dbUser = await prisma.user.findUnique({
+      where: { email: session.email },
+      select: { status: true }
+    });
+
+    // If the user was deleted or blocked in HQ Master, reject the token
+    if (!dbUser || dbUser.status === 'BLOCKED') {
+      return null;
+    }
+    // ---------------------------
+
+    return session;
   } catch (error) {
     return null;
   }
