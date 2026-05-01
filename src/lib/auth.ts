@@ -1,5 +1,6 @@
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
+import { prisma } from "@/lib/prisma";
 
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
@@ -26,21 +27,18 @@ export async function verifyToken(token: string): Promise<SessionPayload | null>
     const { payload } = await jwtVerify(token, secretKey);
     const session = payload as unknown as SessionPayload;
 
-    // --- ADD THIS CHECK HERE ---
-    // Import your prisma client at the top if not already there
-    const dbUser = await prisma.user.findUnique({
+    const dbStudio = await prisma.studio.findUnique({
       where: { email: session.email },
-      select: { status: true }
+      select: { accountStatus: true }
     });
 
-    // If the user was deleted or blocked in HQ Master, reject the token
-    if (!dbUser || dbUser.status === 'BLOCKED') {
+    if (!dbStudio || dbStudio.accountStatus === 'BLOCKED' || dbStudio.accountStatus === 'PENDING') {
       return null;
     }
-    // ---------------------------
 
     return session;
   } catch (error) {
+    console.error("Token verification failed:", error); 
     return null;
   }
 }

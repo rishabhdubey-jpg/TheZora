@@ -1,7 +1,8 @@
 "use client";
 
-import { useActionState, useEffect } from "react";
+import { useActionState, useEffect, Suspense } from "react";
 import { loginStudio } from "@/app/actions/auth";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowRight, Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -19,6 +20,27 @@ export default function LoginPage() {
     }
     return { error: null };
   }, initialState);
+
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-black" />}>
+      <LoginForm state={state} action={action} isPending={isPending} />
+    </Suspense>
+  );
+}
+
+function LoginForm({ state, action, isPending }: { state: any, action: any, isPending: boolean }) {
+  const searchParams = useSearchParams();
+  const errorParam = searchParams.get("error");
+
+  useEffect(() => {
+    if (errorParam === "expired") {
+      toast.error("Your subscription expires, renew it for continuing the services.", {
+        duration: 5000,
+      });
+    }
+  }, [errorParam]);
+
+  const displayError = state?.error || (errorParam === "expired" ? "Your subscription expires, renew it for continuing the services." : null);
 
   return (
     <div className="w-full max-w-md p-8 bg-neutral-900/50 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl">
@@ -60,9 +82,9 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {state?.error && (
+        {displayError && (
           <div className="text-sm font-medium text-red-500 bg-red-500/10 p-3 rounded-lg border border-red-500/20">
-            {state.error}
+            {displayError}
           </div>
         )}
 

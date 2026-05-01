@@ -65,6 +65,13 @@ export async function loginStudio(formData: FormData) {
       return { error: "Invalid email or password" };
     }
 
+    if (studio.accountStatus === 'PENDING') {
+      return { error: "Your account is currently pending approval from TheZora HQ." };
+    }
+    if (studio.accountStatus === 'BLOCKED') {
+      return { error: "Your subscription expires, renew it for continuing the services." };
+    }
+
     const isMatch = await compare(password, studio.password);
 
     if (!isMatch) {

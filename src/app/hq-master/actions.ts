@@ -41,3 +41,15 @@ export async function blockStudio(studioId: string) {
 
   revalidatePath("/hq-master");
 }
+export async function renewStudioAccess(studioId: string) {
+  if (!(await verifySuperAdmin())) {
+    throw new Error("Unauthorized");
+  }
+
+  await prisma.studio.update({
+    where: { id: studioId },
+    data: { accountStatus: "ACTIVE" },
+  });
+
+  revalidatePath("/hq-master");
+}

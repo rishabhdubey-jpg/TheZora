@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import { approveStudio, blockStudio } from "./actions";
+import { approveStudio, blockStudio, renewStudioAccess } from "./actions";
 import { 
   Users, 
   UserPlus, 
@@ -20,19 +20,18 @@ export const dynamic = "force-dynamic";
 
 export default async function HQMasterPage() {
   const session = await getSession();
-  if (!session) redirect("/");
+  if (!session) redirect("/login?error=expired");
 
-// Better logic for HQ Master
-const user = await prisma.studio.findFirst({
-  where: { 
-    email: session.email, // Check the email directly
-    isSuperAdmin: true 
+  const user = await prisma.studio.findFirst({
+    where: { 
+      email: session.email,
+      isSuperAdmin: true 
+    }
+  });
+
+  if (!user) {
+    redirect("/");
   }
-});
-
-if (!user) {
-  redirect("/");
-}
 
   // Fetch counts
   const activeCount = await prisma.studio.count({
@@ -40,6 +39,9 @@ if (!user) {
   });
   const pendingCount = await prisma.studio.count({
     where: { accountStatus: "PENDING" },
+  });
+  const blockedCount = await prisma.studio.count({
+    where: { accountStatus: "BLOCKED" },
   });
 
   // Fetch lists
@@ -50,6 +52,11 @@ if (!user) {
 
   const activeStudios = await prisma.studio.findMany({
     where: { accountStatus: "ACTIVE" },
+    orderBy: { createdAt: "desc" },
+  });
+
+  const blockedStudios = await prisma.studio.findMany({
+    where: { accountStatus: "BLOCKED" },
     orderBy: { createdAt: "desc" },
   });
 
@@ -86,16 +93,16 @@ if (!user) {
           description="Waiting for verification"
         />
         <MetricCard 
-          title="Total Ecosystem" 
-          value={activeCount + pendingCount} 
-          icon={<Users className="w-6 h-6 text-blue-400" />}
-          description="Total registered studios"
+          title="Expired Access" 
+          value={blockedCount} 
+          icon={<ShieldAlert className="w-6 h-6 text-red-400" />}
+          description="Subscriptions requiring renewal"
         />
         <MetricCard 
-          title="System Status" 
-          value="Operational" 
-          icon={<CheckCircle2 className="w-6 h-6 text-emerald-500" />}
-          description="All services running smooth"
+          title="Total Ecosystem" 
+          value={activeCount + pendingCount + blockedCount} 
+          icon={<Users className="w-6 h-6 text-blue-400" />}
+          description="Total registered studios"
         />
       </div>
 
@@ -221,6 +228,73 @@ if (!user) {
                         >
                           <ShieldAlert className="w-3.5 h-3.5 mr-2" />
                           Block Access
+                        </Button>
+                      </form>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {/* Expired Roster Table */}
+      <section className="space-y-6">
+        <div className="flex items-center space-x-3">
+          <ShieldAlert className="w-6 h-6 text-red-400" />
+          <h2 className="text-2xl font-semibold">Expired / Revoked Accounts</h2>
+        </div>
+        
+        <div className="overflow-hidden border border-white/10 rounded-2xl bg-neutral-900/50 backdrop-blur-sm">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-white/5 bg-white/5">
+                <th className="px-6 py-4 text-sm font-medium text-neutral-400">Studio Name</th>
+                <th className="px-6 py-4 text-sm font-medium text-neutral-400">Email</th>
+                <th className="px-6 py-4 text-sm font-medium text-neutral-400">Join Date</th>
+                <th className="px-6 py-4 text-sm font-medium text-neutral-400 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/5">
+              {blockedStudios.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="px-6 py-12 text-center text-neutral-500 italic">
+                    No expired accounts at this time.
+                  </td>
+                </tr>
+              ) : (
+                blockedStudios.map((studio) => (
+                  <tr key={studio.id} className="group hover:bg-white/[0.02] transition-colors">
+                    <td className="px-6 py-4 font-medium">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center">
+                          <Building2 className="w-4 h-4 text-red-500" />
+                        </div>
+                        <span>{studio.name}</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-neutral-400">
+                      <div className="flex items-center space-x-2">
+                        <Mail className="w-3.5 h-3.5 opacity-50" />
+                        <span>{studio.email}</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-neutral-400">
+                      <div className="flex items-center space-x-2">
+                        <Calendar className="w-3.5 h-3.5 opacity-50" />
+                        <span>{formatDate(studio.createdAt)}</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <form action={renewStudioAccess.bind(null, studio.id)}>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500 hover:text-white transition-all"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5 mr-2" />
+                          Renew Access
                         </Button>
                       </form>
                     </td>
