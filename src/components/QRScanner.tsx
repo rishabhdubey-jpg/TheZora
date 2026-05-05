@@ -19,81 +19,84 @@ export default function QRScanner({ onScanSuccess, onScanFailure }: QRScannerPro
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Cleanup on unmount
+  // Bulletproof scanner initialization
   useEffect(() => {
-    return () => {
-      const html5QrCode = html5QrCodeRef.current;
-      if (html5QrCode && html5QrCode.isScanning) {
-        html5QrCode.stop()
-          .then(() => {
-            html5QrCode.clear();
-          })
-          .catch((err) => console.error("Failed to clean up html5Qrcode", err));
+    if (mode !== 'camera') return;
+
+    let isMounted = true;
+    const html5QrCode = new Html5Qrcode("qr-reader");
+    html5QrCodeRef.current = html5QrCode;
+
+    const initializeScanner = async () => {
+      setIsInitializing(true);
+      setError(null);
+      try {
+        // 1. Check if hardware is available before starting
+        const devices = await Html5Qrcode.getCameras();
+        
+        if (devices && devices.length > 0 && isMounted) {
+          const config = {
+            fps: 10,
+            qrbox: (videoWidth: number, videoHeight: number) => {
+              if (!videoWidth || !videoHeight) return { width: 250, height: 250 };
+              const size = Math.floor(Math.min(videoWidth, videoHeight) * 0.7);
+              return { width: size, height: size };
+            }
+          };
+
+          try {
+            // 2. Try rear camera first (Mobile)
+            await html5QrCode.start(
+              { facingMode: "environment" }, 
+              config, 
+              (decodedText) => {
+                if (isMounted) onScanSuccess(decodedText);
+              }
+            );
+            if (isMounted) setIsScanning(true);
+          } catch (environmentErr) {
+            // 3. Fallback to the first available device (Desktop)
+            if (isMounted) {
+              console.warn("Rear camera failed, falling back to default device.");
+              try {
+                await html5QrCode.start(
+                  devices[0].id, 
+                  config, 
+                  (decodedText) => {
+                    if (isMounted) onScanSuccess(decodedText);
+                  }
+                );
+                setIsScanning(true);
+              } catch (fallbackErr) {
+                console.error("All camera initialization failed", fallbackErr);
+                setError("Camera access blocked or unavailable.");
+              }
+            }
+          }
+        } else if (isMounted) {
+          setError("No cameras detected on this device.");
+        }
+      } catch (err) {
+        if (isMounted) {
+          console.error("Failed to query cameras or start scanner:", err);
+          setError("Failed to access camera hardware.");
+        }
+      } finally {
+        if (isMounted) setIsInitializing(false);
       }
     };
-  }, []);
 
-  // Handle mode changes
-  useEffect(() => {
-    if (mode === 'file' && html5QrCodeRef.current && html5QrCodeRef.current.isScanning) {
-      setIsScanning(false);
-      html5QrCodeRef.current.stop().catch(e => console.error("Failed to stop scanner on mode change", e));
-    }
-    setError(null);
-  }, [mode]);
+    initializeScanner();
 
-  const startScanner = async () => {
-    setIsInitializing(true);
-    setError(null);
-    
-    try {
-      if (!html5QrCodeRef.current) {
-        html5QrCodeRef.current = new Html5Qrcode("qr-reader");
+    return () => {
+      isMounted = false;
+      if (html5QrCode.isScanning) {
+        html5QrCode.stop()
+          .then(() => html5QrCode.clear())
+          .catch((err) => console.error("Cleanup error:", err));
       }
-
-      await html5QrCodeRef.current.start(
-        { facingMode: "environment" },
-        {
-          fps: 10,
-          qrbox: (videoWidth: number, videoHeight: number) => {
-            // Safety fallback for when the camera is initializing
-            if (!videoWidth || !videoHeight || videoWidth === 0) {
-              return { width: 250, height: 250 };
-            }
-            
-            const smallestEdge = Math.min(videoWidth, videoHeight);
-            const size = Math.floor(smallestEdge * 0.7);
-            
-            // Return an explicit object to prevent property assignment errors
-            return { width: size, height: size };
-          },
-        },
-        (decodedText) => {
-          onScanSuccess(decodedText);
-        },
-        (errorMessage) => {
-          if (onScanFailure) onScanFailure(errorMessage);
-        }
-      );
-
-      setIsScanning(true);
-    } catch (err: any) {
-      console.error("Camera initialization failed", err);
-      let userFriendlyMessage = "Failed to access camera.";
-      
-      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-        userFriendlyMessage = "Please grant camera permission to scan the QR code.";
-      } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-        userFriendlyMessage = "No camera found on this device.";
-      } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
-        userFriendlyMessage = "Camera is already in use by another application.";
-      }
-      
-      setError(userFriendlyMessage);
-    } finally {
-      setIsInitializing(false);
-    }
-  };
+    };
+  }, [mode, onScanSuccess]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -136,20 +139,7 @@ export default function QRScanner({ onScanSuccess, onScanFailure }: QRScannerPro
       {/* Camera Mode */}
       {mode === 'camera' && (
         <div className="space-y-4">
-          {!isScanning && !isInitializing && !error && (
-            <div className="flex flex-col items-center justify-center p-12 border border-zinc-800 bg-zinc-950/50">
-              <Camera className="w-8 h-8 text-zinc-800 mb-4" />
-              <p className="text-zinc-500 text-[10px] tracking-widest uppercase text-center mb-6">
-                Manual interaction required
-              </p>
-              <Button 
-                onClick={startScanner}
-                className="bg-white text-black hover:bg-zinc-200 rounded-none text-[10px] tracking-widest uppercase px-8"
-              >
-                Tap to Start Scanner
-              </Button>
-            </div>
-          )}
+
 
           {isInitializing && (
             <div className="flex flex-col items-center justify-center p-12 border border-zinc-800 bg-zinc-950/50">
@@ -167,11 +157,11 @@ export default function QRScanner({ onScanSuccess, onScanFailure }: QRScannerPro
                 {error}
               </p>
               <Button 
-                onClick={startScanner}
+                onClick={() => window.location.reload()}
                 variant="outline"
                 className="border-red-900/50 text-red-500 hover:bg-red-500/10 rounded-none text-[10px] tracking-widest uppercase px-8"
               >
-                Retry
+                Reload Page
               </Button>
             </div>
           )}
@@ -179,7 +169,7 @@ export default function QRScanner({ onScanSuccess, onScanFailure }: QRScannerPro
           {/* Hidden initially, shown when isScanning is true */}
           <div 
             id="qr-reader" 
-            className={`w-full overflow-hidden border border-zinc-800 bg-black aspect-square md:aspect-video min-h-[300px] ${isScanning ? 'block' : 'hidden'}`}
+            className={`w-full overflow-hidden border border-zinc-800 bg-black aspect-square md:aspect-video min-h-[300px] ${isScanning || isInitializing ? 'block' : 'hidden'}`}
           ></div>
           
           {isScanning && (
