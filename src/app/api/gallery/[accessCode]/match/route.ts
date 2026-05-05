@@ -42,8 +42,9 @@ export async function POST(
       throw queryError;
     }
 
-    // Sort by distance and limit to top 100 for the final response
+    // Sort by distance, filter for "Goldilocks" matches (< 0.58 threshold), and limit to top 100 for the final response
     const sortedMatches = matches
+      .filter(p => p.distance < 0.58)
       .sort((a, b) => a.distance - b.distance)
       .slice(0, 100)
       .map(p => ({

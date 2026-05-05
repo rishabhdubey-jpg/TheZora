@@ -17,8 +17,12 @@ export default function Home() {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [accessCode, setAccessCode] = useState('');
   const [publicStudio, setPublicStudio] = useState<{ name: string; brandConfig?: { logoUrl?: string; primaryColor?: string } | null } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isVerifying, setIsVerifying] = useState(false);
 
   const validateCodeAndLogin = async (code: string) => {
+    setIsVerifying(true);
+    setError(null);
     try {
       const res = await fetch('/api/events/verify', {
         method: 'POST',
@@ -28,19 +32,21 @@ export default function Home() {
       
       if (!res.ok) {
         if (res.status === 404) {
-          alert("Invalid Access Code. Please try again.");
+          setError("Invalid Access Code. Please try again.");
         } else {
-          throw new Error("Failed to verify access code.");
+          setError("Failed to verify access code.");
         }
+        setIsVerifying(false);
         return;
       }
 
       const data = await res.json();
       setShowLoginModal(false);
       router.push(`/gallery/${data.accessCode}`);
-    } catch (error) {
-      console.error("[Login] Verification error:", error);
-      alert("Verification server unavailable. Please try again later.");
+    } catch (err) {
+      console.error("[Login] Verification error:", err);
+      setError("Verification server unavailable. Please try again later.");
+      setIsVerifying(false);
     }
   };
 
@@ -149,6 +155,8 @@ export default function Home() {
         onLogin={validateCodeAndLogin}
         accessCode={accessCode}
         setAccessCode={setAccessCode}
+        error={error}
+        isVerifying={isVerifying}
       />
 
       <footer className="py-20 px-6 border-t border-zinc-900 bg-black">

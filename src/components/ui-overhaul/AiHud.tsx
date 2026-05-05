@@ -9,9 +9,18 @@ interface AiHudProps {
   progress: number;
   matchCount?: number;
   statusText?: string;
+  onRetry?: () => void;
+  onClose?: () => void;
 }
 
-export default function AiHud({ isActive, progress, matchCount = 0, statusText = "Neural Scanning Active" }: AiHudProps) {
+export default function AiHud({ 
+  isActive, 
+  progress, 
+  matchCount = 0, 
+  statusText = "Neural Scanning Active",
+  onRetry,
+  onClose
+}: AiHudProps) {
   const isComplete = progress >= 100;
   const hasMatches = matchCount > 0;
   const isSuccess = isComplete && hasMatches;
@@ -104,19 +113,34 @@ export default function AiHud({ isActive, progress, matchCount = 0, statusText =
                     </div>
                     
                     <h3 className={hasMatches ? "text-white font-serif text-4xl mb-3 tracking-tight" : "text-zinc-500 font-serif text-3xl mb-2"}>
-                      {hasMatches ? "Biometric Identification Validated" : "Sequence Terminated"}
+                      {hasMatches ? "Biometric Identification Validated" : "No Matches Found"}
                     </h3>
                     
                     <p className="text-zinc-500 text-[10px] tracking-[0.4em] uppercase mb-12">
-                      {hasMatches ? `Matched ${matchCount} fragments in neural storage` : "No matches isolated in current dataset"}
+                      {hasMatches ? `Matched ${matchCount} fragments in neural storage` : "We couldn't find any matching photos of you in this collection."}
                     </p>
 
-                    {hasMatches && (
-                       <motion.div 
+                    {hasMatches ? (
+                      <motion.div 
                         initial={{ width: 0, opacity: 0 }}
                         animate={{ width: "240px", opacity: 1 }}
                         className="h-[1px] bg-gradient-to-r from-transparent via-gold to-transparent mb-8 shadow-[0_0_15px_rgba(212,175,55,0.5)]"
                       />
+                    ) : (
+                      <div className="flex gap-4 mt-8">
+                        <button 
+                          onClick={onRetry}
+                          className="px-6 py-3 bg-white text-black text-[10px] tracking-[0.2em] uppercase font-bold hover:bg-zinc-200 transition-all"
+                        >
+                          Try Again
+                        </button>
+                        <button 
+                          onClick={onClose}
+                          className="px-6 py-3 border border-zinc-800 text-zinc-400 text-[10px] tracking-[0.2em] uppercase hover:text-white hover:border-zinc-600 transition-all"
+                        >
+                          Return to Gallery
+                        </button>
+                      </div>
                     )}
                   </motion.div>
                 ) : (

@@ -12,6 +12,8 @@ interface LoginModalProps {
   onLogin: (code: string) => void;
   accessCode: string;
   setAccessCode: (code: string) => void;
+  error?: string | null;
+  isVerifying?: boolean;
 }
 
 export default function LoginModal({
@@ -20,6 +22,8 @@ export default function LoginModal({
   onLogin,
   accessCode,
   setAccessCode,
+  error,
+  isVerifying,
 }: LoginModalProps) {
   const [isScanning, setIsScanning] = useState(false);
 
@@ -72,18 +76,26 @@ export default function LoginModal({
                   value={accessCode}
                   onChange={(e) => setAccessCode(e.target.value.toUpperCase())}
                   autoFocus
+                  disabled={isVerifying}
                 />
+                {error && (
+                  <p className="text-red-500 text-[10px] tracking-widest uppercase text-center animate-pulse">
+                    {error}
+                  </p>
+                )}
               </div>
               <div className="flex flex-col gap-3">
                 <Button 
                   type="submit" 
+                  disabled={isVerifying}
                   className="w-full h-14 bg-white text-black hover:bg-zinc-200 rounded-none text-xs tracking-[0.2em] uppercase"
                 >
-                  Unlock Gallery
+                  {isVerifying ? "Verifying..." : "Unlock Gallery"}
                 </Button>
                 <Button 
                   type="button"
                   variant="outline"
+                  disabled={isVerifying}
                   className="w-full h-14 border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-none text-xs tracking-[0.2em] uppercase"
                   onClick={() => setIsScanning(true)}
                 >

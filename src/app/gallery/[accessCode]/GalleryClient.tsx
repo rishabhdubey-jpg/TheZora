@@ -42,6 +42,7 @@ export default function GalleryClient({ initialEvent }: { initialEvent: GalleryE
   const [filteredPhotos, setFilteredPhotos] = useState<GalleryPhoto[]>([]);
   const [currentPhoto, setCurrentPhoto] = useState<GalleryPhoto | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isEmptyMatch, setIsEmptyMatch] = useState(false);
 
   useEffect(() => {
     const handleContextMenu = (e: MouseEvent) => {
@@ -63,6 +64,7 @@ export default function GalleryClient({ initialEvent }: { initialEvent: GalleryE
   const handleAiMatchSuccess = async (selfieDescriptor: Float32Array) => {
     setShowAiInputModal(false);
     setIsAiProcessing(true);
+    setIsEmptyMatch(false);
     setScanProgress(0);
 
     try {
@@ -89,8 +91,8 @@ export default function GalleryClient({ initialEvent }: { initialEvent: GalleryE
       if (data.photos.length > 0) {
         setTimeout(() => setIsAiProcessing(false), 500);
       } else {
-        setIsAiProcessing(false);
-        toast.error("No matches found in this collection.");
+        setIsEmptyMatch(true);
+        // Keep isAiProcessing true so the HUD stays visible with the empty state UI
       }
 
     } catch (err) {
@@ -235,6 +237,11 @@ export default function GalleryClient({ initialEvent }: { initialEvent: GalleryE
         isActive={isAiProcessing} 
         progress={scanProgress} 
         matchCount={filteredPhotos.length}
+        onRetry={() => {
+          setIsAiProcessing(false);
+          setShowAiInputModal(true);
+        }}
+        onClose={() => setIsAiProcessing(false)}
       />
 
       <AnimatePresence>
