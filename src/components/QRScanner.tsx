@@ -22,8 +22,13 @@ export default function QRScanner({ onScanSuccess, onScanFailure }: QRScannerPro
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (html5QrCodeRef.current && html5QrCodeRef.current.isScanning) {
-        html5QrCodeRef.current.stop().catch(e => console.error("Failed to stop scanner", e));
+      const html5QrCode = html5QrCodeRef.current;
+      if (html5QrCode && html5QrCode.isScanning) {
+        html5QrCode.stop()
+          .then(() => {
+            html5QrCode.clear();
+          })
+          .catch((err) => console.error("Failed to clean up html5Qrcode", err));
       }
     };
   }, []);
@@ -50,7 +55,18 @@ export default function QRScanner({ onScanSuccess, onScanFailure }: QRScannerPro
         { facingMode: "environment" },
         {
           fps: 10,
-          qrbox: { width: 250, height: 250 },
+          qrbox: (videoWidth: number, videoHeight: number) => {
+            // Safety fallback for when the camera is initializing
+            if (!videoWidth || !videoHeight || videoWidth === 0) {
+              return { width: 250, height: 250 };
+            }
+            
+            const smallestEdge = Math.min(videoWidth, videoHeight);
+            const size = Math.floor(smallestEdge * 0.7);
+            
+            // Return an explicit object to prevent property assignment errors
+            return { width: size, height: size };
+          },
         },
         (decodedText) => {
           onScanSuccess(decodedText);
@@ -163,7 +179,7 @@ export default function QRScanner({ onScanSuccess, onScanFailure }: QRScannerPro
           {/* Hidden initially, shown when isScanning is true */}
           <div 
             id="qr-reader" 
-            className={`w-full overflow-hidden border border-zinc-800 bg-white ${isScanning ? 'block' : 'hidden'}`}
+            className={`w-full overflow-hidden border border-zinc-800 bg-black aspect-square md:aspect-video min-h-[300px] ${isScanning ? 'block' : 'hidden'}`}
           ></div>
           
           {isScanning && (
