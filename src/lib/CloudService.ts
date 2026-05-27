@@ -113,30 +113,79 @@ export async function provisionStudioBucket(
 }
 
 /**
- * Generates a Shared Access Signature (SAS) URL for direct browser uploads.
- * Uses 'PUT' with x-ms-blob-type: BlockBlob.
+ * Generates a signed URL for uploading a blob to GCP.
+ */
+export async function generateGcsPresignedUploadUrl(
+  bucketName: string,
+  blobPath: string,
+  contentType: string,
+  credentials: any
+): Promise<PresignedUrlResult> {
+  const projectId = credentials?.projectId || credentials?.project_id || process.env.GCP_PROJECT_ID;
+  const clientEmail = credentials?.clientEmail || credentials?.client_email || process.env.GCP_CLIENT_EMAIL;
+  const privateKey = (credentials?.privateKey || credentials?.private_key || process.env.GCP_PRIVATE_KEY || '').replace(/\\n/g, '\n');
+
+  if (!projectId || !clientEmail || !privateKey) {
+    throw new Error('Incomplete GCP configuration for presigned URL');
+  }
+
+  const storage = new Storage({
+    projectId,
+    credentials: {
+      client_email: clientEmail,
+      private_key: privateKey,
+    }
+  });
+
+  const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
+  const [uploadUrl] = await storage
+    .bucket(bucketName)
+    .file(blobPath)
+    .getSignedUrl({
+      version: 'v4',
+      action: 'write',
+      expires: expiresAt,
+      contentType: contentType,
+    });
+
+  return {
+    uploadUrl,
+    blobPath,
+    containerName: bucketName,
+    expiresAt,
+  };
+}
+
+/**
+ * Generates a presigned upload URL for direct browser uploads.
  */
 export async function generatePresignedUploadUrl(
+  provider: 'GCP' | 'AZURE' | string,
   containerName: string,
   blobPath: string,
   contentType: string,
-  _remainingQuotaBytes: number, // Azure doesn't enforce this in SAS token
-  credentials: StudioCredentials
+  remainingQuotaBytes: number,
+  credentials: any
 ): Promise<PresignedUrlResult> {
-  const accountName = credentials.accountName || credentials.account_name;
-  const accountKey = credentials.accountKey || credentials.account_key;
+  if (provider === 'GCP') {
+    return generateGcsPresignedUploadUrl(containerName, blobPath, contentType, credentials);
+  }
 
-  if (!accountName || !accountKey) throw new Error("Credentials missing");
+  // Azure Implementation
+  const accountName = credentials?.accountName || credentials?.account_name || process.env.AZURE_STORAGE_ACCOUNT_NAME;
+  const accountKey = credentials?.accountKey || credentials?.account_key || process.env.AZURE_STORAGE_ACCOUNT_KEY;
+
+  if (!accountName || !accountKey) throw new Error("Azure credentials missing");
 
   const sharedKeyCredential = new StorageSharedKeyCredential(accountName, accountKey);
   const now = new Date();
-  const startsOn = new Date(now.getTime() - 5 * 60 * 1000); // 5 minutes in the past for clock skew
-  const expiresAt = new Date(now.getTime() + 15 * 60 * 1000); // 15 mins
+  const startsOn = new Date(now.getTime() - 5 * 60 * 1000);
+  const expiresAt = new Date(now.getTime() + 15 * 60 * 1000);
 
   const sasToken = generateBlobSASQueryParameters({
     containerName,
     blobName: blobPath,
-    permissions: BlobSASPermissions.parse("racwd"), // Read, Add, Create, Write, Delete
+    permissions: BlobSASPermissions.parse("racwd"),
     startsOn: startsOn,
     expiresOn: expiresAt,
     protocol: SASProtocol.HttpsAndHttp,

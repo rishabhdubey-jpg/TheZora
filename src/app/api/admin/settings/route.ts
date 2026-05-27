@@ -22,7 +22,11 @@ export async function GET(req: NextRequest) {
       cloudCredentialsRef: studio.cloudCredentialsRef
     };
 
-    return NextResponse.json({ brandConfig: studio.brandConfig || {}, cloudConfig });
+    return NextResponse.json({ 
+      studioId,
+      brandConfig: studio.brandConfig || {}, 
+      cloudConfig 
+    });
   } catch (error: any) {
     console.error('[/api/admin/settings] GET Error:', error);
     return NextResponse.json({ error: 'Failed to fetch settings' }, { status: 500 });

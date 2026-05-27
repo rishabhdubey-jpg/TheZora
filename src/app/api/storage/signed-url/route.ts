@@ -32,12 +32,22 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Studio storage configuration incomplete' }, { status: 404 });
     }
 
-    let credentials;
+    let credentials: any = {};
     try {
-      credentials = JSON.parse(studio.cloudCredentialsRef);
+      if (studio.cloudCredentialsRef && studio.cloudCredentialsRef !== 'system-default') {
+        credentials = JSON.parse(studio.cloudCredentialsRef);
+      }
     } catch (e) {
       console.error('[/api/storage/signed-url] Credentials parse error:', e);
       return NextResponse.json({ error: 'Invalid storage credentials' }, { status: 500 });
+    }
+
+    const provider = studio.storageProvider || 'AZURE';
+
+    // Route Google Drive requests straight to our streaming proxy
+    if (provider === 'GOOGLE_DRIVE' || blobPath.startsWith('google-drive://')) {
+      const proxyUrl = `/api/storage/proxy?path=${encodeURIComponent(blobPath)}&studioId=${studioId}`;
+      return NextResponse.json({ url: proxyUrl });
     }
 
     // 2. Generate Signed URL (valid for 1 hour)

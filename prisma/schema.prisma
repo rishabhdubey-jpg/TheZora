@@ -56,6 +56,7 @@ model Studio {
   brandConfig           Json?         // Custom brand settings (e.g. { logoUrl, primaryColor })
 
   events          Event[]
+  media           Media[]
 
   @@map("studios")
 }
@@ -117,4 +118,16 @@ model FaceDescriptor {
 
   @@index([photoId])
   @@map("face_descriptors")
+}
+
+model Media {
+  id        String   @id @default(cuid())
+  driveId   String   @unique
+  url       String
+  studioId  String
+  studio    Studio   @relation(fields: [studioId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([studioId])
+  @@map("media")
 }

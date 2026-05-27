@@ -26,10 +26,11 @@ interface UploadFile {
 
 interface Props {
   eventId: string;
+  studioId?: string;
   onUploadComplete?: (files: { gcsObjectPath: string; filename: string; sizeBytes: number }[]) => void;
 }
 
-export default function UploadHandler({ eventId, onUploadComplete }: Props) {
+export default function UploadHandler({ eventId, studioId: propStudioId, onUploadComplete }: Props) {
   const [files, setFiles] = useState<UploadFile[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -37,7 +38,7 @@ export default function UploadHandler({ eventId, onUploadComplete }: Props) {
   const [modelsLoaded, setModelsLoaded] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { connectedProvider } = useCloudStore();
+  const { connectedProvider, studioId } = useCloudStore();
 
   // Load Face-API models on mount
   useEffect(() => {
@@ -134,54 +135,84 @@ export default function UploadHandler({ eventId, onUploadComplete }: Props) {
 
     updateFile({ status: "uploading", progress: 0 });
 
+    const activeStudioId = propStudioId || studioId;
+
     try {
-      // Step 1 — Get presigned (or SAS) URL
-      const presignRes = await fetch("/api/storage/presign", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          eventId,
-          filename: uploadFile.file.name,
-          contentType: uploadFile.file.type,
-          fileSizeBytes: uploadFile.file.size,
-        }),
-      });
+      let storagePath = "";
 
-      if (!presignRes.ok) {
-        const err = await presignRes.json();
-        throw new Error(err.error || "Could not get upload URL.");
-      }
-
-      const { uploadUrl, gcsObjectPath, blobPath: azureBlobPath } = await presignRes.json();
-      const storagePath = azureBlobPath || gcsObjectPath; // Azure uses blobPath, GCS uses gcsObjectPath
-
-      // Step 2 — Direct PUT to Cloud Storage (GCS or Azure)
-      await new Promise<void>((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.open("PUT", uploadUrl, true);
-        xhr.setRequestHeader("Content-Type", uploadFile.file.type);
+      if (connectedProvider === "Google Drive") {
+        // Google Drive: Direct pass-through to our backend
+        const formData = new FormData();
+        formData.append("file", uploadFile.file);
         
-        // Azure specific headers
-        if (connectedProvider === "Azure") {
-          xhr.setRequestHeader("x-ms-blob-type", "BlockBlob");
-          xhr.setRequestHeader("x-ms-blob-content-type", uploadFile.file.type);
+        if (activeStudioId) {
+          formData.append("studioId", activeStudioId);
+        } else {
+          console.error("UploadHandler: Critical Error - No activeStudioId found (Prop or Store)");
+          throw new Error("Studio configuration missing. Please refresh.");
         }
 
-        xhr.upload.onprogress = (event) => {
-          if (event.lengthComputable) {
-            const progress = Math.round((event.loaded / event.total) * 100);
-            updateFile({ progress });
+        const driveRes = await fetch("/api/storage/upload/drive", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!driveRes.ok) {
+          const err = await driveRes.json();
+          throw new Error(err.error || "Drive upload failed.");
+        }
+
+        const driveData = await driveRes.json();
+        storagePath = driveData.gcsObjectPath;
+        updateFile({ progress: 100 });
+      } else {
+        // Azure/GCP: Get presigned URL
+        const presignRes = await fetch("/api/storage/presign", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            eventId,
+            filename: uploadFile.file.name,
+            contentType: uploadFile.file.type,
+            fileSizeBytes: uploadFile.file.size,
+          }),
+        });
+
+        if (!presignRes.ok) {
+          const err = await presignRes.json();
+          throw new Error(err.error || "Could not get upload URL.");
+        }
+
+        const { uploadUrl, gcsObjectPath, blobPath: azureBlobPath } = await presignRes.json();
+        storagePath = azureBlobPath || gcsObjectPath;
+
+        // Direct PUT to Cloud Storage
+        await new Promise<void>((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open("PUT", uploadUrl, true);
+          xhr.setRequestHeader("Content-Type", uploadFile.file.type);
+          
+          if (connectedProvider === "Azure") {
+            xhr.setRequestHeader("x-ms-blob-type", "BlockBlob");
+            xhr.setRequestHeader("x-ms-blob-content-type", uploadFile.file.type);
           }
-        };
 
-        xhr.onload = () => {
-          if (xhr.status >= 200 && xhr.status < 300) resolve();
-          else reject(new Error(`Upload failed with HTTP ${xhr.status}`));
-        };
+          xhr.upload.onprogress = (event) => {
+            if (event.lengthComputable) {
+              const progress = Math.round((event.loaded / event.total) * 100);
+              updateFile({ progress });
+            }
+          };
 
-        xhr.onerror = () => reject(new Error("Network error during upload."));
-        xhr.send(uploadFile.file);
-      });
+          xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) resolve();
+            else reject(new Error(`Upload failed with HTTP ${xhr.status}`));
+          };
+
+          xhr.onerror = () => reject(new Error("Network error during upload."));
+          xhr.send(uploadFile.file);
+        });
+      }
 
       // Step 2.5 — Immediate Face Scan
       let faceDescriptors: any[] = [];
@@ -197,7 +228,7 @@ export default function UploadHandler({ eventId, onUploadComplete }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           eventId,
-          gcsObjectPath: storagePath, // We reuse the same DB field name for now
+          gcsObjectPath: storagePath,
           filename: uploadFile.file.name,
           contentType: uploadFile.file.type,
           sizeBytes: uploadFile.file.size,

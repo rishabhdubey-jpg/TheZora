@@ -36,6 +36,7 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 .env
+.env.example
 .env.local
 .env.development.local
 .env.test.local
@@ -56,6 +57,7 @@ next-env.d.ts
 # Operating System Files
 .DS_Store
 Thumbs.db
+credentials.json
 
 # Optional: If you use face-api weights locally and don't want them in Git
 # public/models/

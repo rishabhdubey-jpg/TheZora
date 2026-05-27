@@ -2,6 +2,11 @@
 
 export const dynamic = 'force-dynamic';
 
+import MediaUploader from '@/components/MediaUploader';
+
+// Use it in your page
+<MediaUploader />
+
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
@@ -162,7 +167,7 @@ export default function Home() {
       <footer className="py-20 px-6 border-t border-zinc-900 bg-black">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-10">
            <div className="flex items-center gap-8">
-              <Link href="https://www.instagram.com/thezora.in/" target="_blank" rel="noopener noreferrer" className="text-zinc-500 hover:text-white text-[10px] tracking-[0.2em] uppercase transition-colors">Instagram</Link>
+              <Link href="https://www.instagram.com/thezora.studio" target="_blank" rel="noopener noreferrer" className="text-zinc-500 hover:text-white text-[10px] tracking-[0.2em] uppercase transition-colors">Instagram</Link>
               <Link href="/admin" className="text-zinc-500 hover:text-white text-[10px] tracking-[0.2em] uppercase transition-colors">Studio Access</Link>
            </div>
            <p className="text-zinc-600 text-[10px] tracking-widest uppercase">&copy; 2026 TheZora. All Rights Reserved.</p>

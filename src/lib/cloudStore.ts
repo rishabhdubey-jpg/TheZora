@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 
-export type CloudProviderType = 'GCP' | 'AWS' | 'Azure' | null;
+export type CloudProviderType = 'GCP' | 'AWS' | 'Azure' | 'Google Drive' | null;
 
 export interface CloudStorageState {
   // Connection status
@@ -209,6 +209,7 @@ export const useCloudStore = create<CloudStorageState>()(
           // Map DB provider enum to store's CloudProviderType
           const mapped: CloudProviderType =
             hasCredentials && provider === 'AZURE' ? 'Azure'
+            : provider === 'GCP' && data.cloudConfig?.cloudCredentialsRef === 'system-default' ? 'Google Drive'
             : hasCredentials && provider === 'GCP' ? 'GCP'
             : hasCredentials && provider === 'AWS' ? 'AWS'
             : null;

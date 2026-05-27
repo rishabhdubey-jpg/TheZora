@@ -54,11 +54,17 @@ export async function POST(req: NextRequest) {
     const isBodyPopulated = credentials && (credentials.accountName || credentials.account_name);
     
     if (!isBodyPopulated && studio.cloudCredentialsRef) {
-      try {
-        activeCredentials = JSON.parse(studio.cloudCredentialsRef);
-        console.log(`[/api/storage/presign] Using stored credentials from database for studio: ${studioId}`);
-      } catch (e) {
-        console.error('[/api/storage/presign] Failed to parse cloudCredentialsRef:', e);
+      if (studio.cloudCredentialsRef === 'system-default') {
+        activeCredentials = {};
+        console.log(`[/api/storage/presign] Using system-default credentials for studio: ${studioId}`);
+      } else {
+        try {
+          activeCredentials = JSON.parse(studio.cloudCredentialsRef);
+          console.log(`[/api/storage/presign] Using stored credentials from database for studio: ${studioId}`);
+        } catch (e) {
+          console.error('[/api/storage/presign] Failed to parse cloudCredentialsRef:', e);
+          activeCredentials = {}; // Safe fallback to .env
+        }
       }
     }
 
@@ -67,6 +73,8 @@ export async function POST(req: NextRequest) {
       const logCreds = { ...activeCredentials };
       if (logCreds.accountKey) logCreds.accountKey = '***MASKED***';
       if (logCreds.account_key) logCreds.account_key = '***MASKED***';
+      if (logCreds.privateKey) logCreds.privateKey = '***MASKED***';
+      if (logCreds.private_key) logCreds.private_key = '***MASKED***';
       console.log('[/api/storage/presign] Active Credentials:', logCreds);
     }
 
@@ -113,11 +121,12 @@ export async function POST(req: NextRequest) {
     }
     // ─────────────────────────────────────────────────────────────────────────
 
-    // Build the Azure blob path
+    // Build the cloud path
     const safeFilename = filename.replace(/[^a-zA-Z0-9.\-_]/g, '_');
     const blobPath = `${eventId}/${Date.now()}_${safeFilename}`;
 
     const result = await generatePresignedUploadUrl(
+      studio.storageProvider || 'AZURE',
       bucketName,
       blobPath,
       contentType,

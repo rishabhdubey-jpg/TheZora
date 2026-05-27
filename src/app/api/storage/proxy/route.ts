@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { BlobServiceClient, StorageSharedKeyCredential } from '@azure/storage-blob';
+import { google } from 'googleapis';
 import { Storage } from '@google-cloud/storage';
 import { prisma } from '@/lib/prisma';
 import { Readable } from 'stream';
@@ -28,17 +29,19 @@ export async function GET(req: NextRequest) {
     let creds: any = {};
 
     // 1. Resolve Studio & Credentials
-    if (!studioId) {
-      const photo = await prisma.photo.findFirst({
-        where: { gcsObjectPath: blobPath },
-        select: { studioId: true }
-      });
+    let dbContentType = 'video/mp4'; // Safe fallback
+    
+    const photo = await prisma.photo.findFirst({
+      where: { gcsObjectPath: blobPath },
+      select: { studioId: true, contentType: true }
+    });
 
-      if (!photo) {
-        console.warn(`[/api/storage/proxy] Photo not indexed for path: ${blobPath}.`);
-        return NextResponse.json({ error: 'Photo not indexed' }, { status: 404 });
-      }
-      studioId = photo.studioId;
+    if (photo) {
+      if (!studioId) studioId = photo.studioId;
+      if (photo.contentType) dbContentType = photo.contentType;
+    } else if (!studioId) {
+      console.warn(`[/api/storage/proxy] Photo not indexed for path: ${blobPath}.`);
+      return NextResponse.json({ error: 'Photo not indexed' }, { status: 404 });
     }
 
     const studio = await prisma.studio.findUnique({
@@ -51,9 +54,11 @@ export async function GET(req: NextRequest) {
     }
 
     try {
-      creds = JSON.parse(studio.cloudCredentialsRef);
-      accountName = creds.accountName || creds.account_name;
-      accountKey = creds.accountKey || creds.account_key;
+      if (studio.cloudCredentialsRef && studio.cloudCredentialsRef !== 'system-default') {
+        creds = JSON.parse(studio.cloudCredentialsRef);
+      }
+      accountName = creds.accountName || creds.account_name || '';
+      accountKey = creds.accountKey || creds.account_key || '';
       containerName = studio.storageBucketName || '';
     } catch (e) {
       console.error('[/api/storage/proxy] Failed to parse credentials:', e);
@@ -62,6 +67,62 @@ export async function GET(req: NextRequest) {
 
     const provider = studio.storageProvider || 'AZURE';
     
+    // Intercept Google Drive requests
+    if (provider === 'GOOGLE_DRIVE' || blobPath.startsWith('google-drive://')) {
+      const fileId = blobPath.replace('google-drive://', '');
+      
+      const oauth2Client = new google.auth.OAuth2(
+        process.env.GOOGLE_CLIENT_ID,
+        process.env.GOOGLE_CLIENT_SECRET
+      );
+      oauth2Client.setCredentials({ refresh_token: process.env.GOOGLE_REFRESH_TOKEN });
+      const drive = google.drive({ version: 'v3', auth: oauth2Client });
+
+      try {
+        // 1. Get the raw access token directly from our OAuth client
+        const { token } = await oauth2Client.getAccessToken();
+        if (!token) throw new Error("Failed to retrieve Google OAuth token");
+
+        // 2. Prepare headers, forwarding the browser's Range request
+        const rangeHeader = req.headers.get('range');
+        const fetchHeaders: Record<string, string> = {
+          Authorization: `Bearer ${token}`
+        };
+        if (rangeHeader) {
+          fetchHeaders['Range'] = rangeHeader;
+        }
+
+        // 3. Use native fetch to get a pure Web Stream response
+        const driveFetchRes = await fetch(
+          `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
+          { headers: fetchHeaders }
+        );
+
+        if (!driveFetchRes.ok) {
+          throw new Error(`Google Drive API responded with ${driveFetchRes.status}`);
+        }
+
+        // 4. Construct response headers using DB fallback for strict MIME typing
+        const responseHeaders = new Headers(driveFetchRes.headers);
+        const contentType = dbContentType || 'video/mp4';
+        
+        responseHeaders.set('Content-Type', contentType);
+        responseHeaders.set('Accept-Ranges', 'bytes');
+        responseHeaders.set('Access-Control-Allow-Origin', '*');
+        responseHeaders.set('Cross-Origin-Resource-Policy', 'cross-origin');
+
+        // 5. Pipe the native Web Stream directly to Next.js
+        return new NextResponse(driveFetchRes.body, {
+          status: driveFetchRes.status,
+          headers: responseHeaders
+        });
+
+      } catch (driveErr) {
+        console.error('[/api/storage/proxy] Google Drive native fetch error:', driveErr);
+        return NextResponse.json({ error: 'Failed to stream from Google Drive' }, { status: 500 });
+      }
+    }
+
     let totalLength = 0;
     let webStream: any = null;
     let contentType = 'application/octet-stream';

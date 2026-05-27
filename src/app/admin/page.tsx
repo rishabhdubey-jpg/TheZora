@@ -60,6 +60,18 @@ export default function AdminDashboard() {
   const [activeAdminTab, setActiveAdminTab] = useState<'dashboard'|'security'>('dashboard');
   const [activeSubTab, setActiveSubTab] = useState<'media'|'cinematic'>('media');
   const [activeEventId, setActiveEventId] = useState<string>(''); // Access Code
+  const [studioIdProp, setStudioIdProp] = useState<string>('');
+
+  useEffect(() => {
+    const fetchStudioData = async () => {
+      const res = await fetch('/api/admin/settings');
+      if (res.ok) {
+        const data = await res.json();
+        setStudioIdProp(data.studioId);
+      }
+    };
+    fetchStudioData();
+  }, []);
 
 
   const fetchEvents = useCallback(async () => {
@@ -447,6 +459,7 @@ export default function AdminDashboard() {
                         <div className="bg-black border border-zinc-900 p-8">
                           <UploadHandler 
                             eventId={activeEvent.dbId} 
+                            studioId={studioIdProp}
                             onUploadComplete={() => fetchEvents()} 
                           />
                         </div>
@@ -614,6 +627,7 @@ export default function AdminDashboard() {
                   <CinematicPlayer 
                     src={activeMedia.url} 
                     contentType={activeMedia.contentType}
+                    studioId={studioIdProp}
                   />
                 </div>
               ) : (
