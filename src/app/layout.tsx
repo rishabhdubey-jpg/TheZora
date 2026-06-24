@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Playfair_Display, Inter } from 'next/font/google';
 import './globals.css';
 import ProtectionLayer from '@/components/ProtectionLayer';
+import { Analytics } from '@vercel/analytics/next';
 
 const playfair = Playfair_Display({ subsets: ['latin'], variable: '--font-playfair' });
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
@@ -26,6 +27,7 @@ export default function RootLayout({
       <body>
         <ProtectionLayer />
         {children}
+        <Analytics />
       </body>
     </html>
   );
